@@ -1,0 +1,32 @@
+name: Stellar Splash Contracts CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test and Build Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      - name: Rustfmt Check
+        run: cargo fmt --all -- --check
+
+      - name: Run Unit Tests
+        run: cargo test --lib --verbose
+
+      - name: Build WASM Target
+        run: cargo build --target wasm32-unknown-unknown --release
