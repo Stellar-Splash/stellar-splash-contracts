@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
-    String,
+    String, Vec,
 };
 
 #[contracterror]
@@ -31,6 +31,13 @@ pub enum Error {
     AgreementNotLocked = 20,
     RankingAlreadyFinalized = 21,
     RankingNotFound = 22,
+    SettlementAlreadyExists = 23,
+    SettlementNotFound = 24,
+    SettlementAlreadyExecuted = 25,
+    AgreementHashMismatch = 26,
+    RankingHashMismatch = 27,
+    AllocationExceedsPool = 28,
+    EmptyAllocations = 29,
 }
 
 #[contracttype]
@@ -131,6 +138,49 @@ pub struct PrizeAgreementRecord {
 }
 
 #[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum SettlementStatus {
+    Authorized = 0,
+    Settled = 1,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecipientAllocation {
+    pub recipient: Address,
+    pub rank: u32,
+    pub amount: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettlementInput {
+    pub tournament_id: u64,
+    pub agreement_version: u32,
+    pub agreement_hash: BytesN<32>,
+    pub ranking_version: u32,
+    pub ranking_hash: BytesN<32>,
+    pub settlement_hash: BytesN<32>,
+    pub allocations: Vec<RecipientAllocation>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettlementRecord {
+    pub tournament_id: u64,
+    pub agreement_version: u32,
+    pub agreement_hash: BytesN<32>,
+    pub ranking_version: u32,
+    pub ranking_hash: BytesN<32>,
+    pub settlement_hash: BytesN<32>,
+    pub total_amount: i128,
+    pub status: SettlementStatus,
+    pub authorized_at: u64,
+    pub settled_at: u64,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -141,6 +191,8 @@ enum DataKey {
     Ranking(u64),
     PrizeAgreement(u64, u32),
     ActiveAgreementVersion(u64),
+    Settlement(u64),
+    SettlementAllocations(u64),
 }
 
 #[contract]
@@ -695,6 +747,213 @@ impl TournamentVaultContract {
     pub fn get_vault_balance(env: Env, tournament_id: u64) -> Result<i128, Error> {
         let t = Self::get_tournament(env, tournament_id)?;
         Ok(t.current_funded_amount)
+    }
+
+    // -------------------------------------------------------------
+    // DETERMINISTIC SETTLEMENT LAYER
+    // -------------------------------------------------------------
+
+    /// Authorizes a deterministic settlement against locked agreement and finalized ranking.
+    pub fn authorize_settlement(
+        env: Env,
+        caller: Address,
+        input: SettlementInput,
+    ) -> Result<SettlementRecord, Error> {
+        caller.require_auth();
+
+        let tourn_key = DataKey::Tournament(input.tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != caller {
+            let admin = Self::get_admin(env.clone())?;
+            if admin != caller {
+                return Err(Error::Unauthorized);
+            }
+        }
+
+        if tournament.state != TournamentState::Completed {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        // Validate prize agreement is locked and hash matches
+        let agr_key = DataKey::PrizeAgreement(input.tournament_id, input.agreement_version);
+        let agreement: PrizeAgreementRecord = env
+            .storage()
+            .persistent()
+            .get(&agr_key)
+            .ok_or(Error::AgreementNotFound)?;
+
+        if agreement.status != AgreementStatus::Locked {
+            return Err(Error::AgreementNotLocked);
+        }
+        if agreement.agreement_hash != input.agreement_hash {
+            return Err(Error::AgreementHashMismatch);
+        }
+
+        // Validate final ranking exists, version matches, and ranking hash matches
+        let rank_key = DataKey::Ranking(input.tournament_id);
+        let ranking: RankingRecord = env
+            .storage()
+            .persistent()
+            .get(&rank_key)
+            .ok_or(Error::RankingNotFound)?;
+
+        if ranking.ranking_version != input.ranking_version
+            || ranking.ranking_hash != input.ranking_hash
+        {
+            return Err(Error::RankingHashMismatch);
+        }
+
+        // Settlement must not already exist
+        let settle_key = DataKey::Settlement(input.tournament_id);
+        if env.storage().persistent().has(&settle_key) {
+            return Err(Error::SettlementAlreadyExists);
+        }
+
+        if input.allocations.is_empty() {
+            return Err(Error::EmptyAllocations);
+        }
+
+        // Calculate total allocated and enforce invariant: <= current_funded_amount
+        let mut total_allocated: i128 = 0;
+        for alloc in input.allocations.iter() {
+            if alloc.amount <= 0 {
+                return Err(Error::InvalidAmount);
+            }
+            total_allocated = total_allocated
+                .checked_add(alloc.amount)
+                .ok_or(Error::ArithmeticOverflow)?;
+        }
+
+        if total_allocated > tournament.current_funded_amount {
+            return Err(Error::AllocationExceedsPool);
+        }
+
+        let record = SettlementRecord {
+            tournament_id: input.tournament_id,
+            agreement_version: input.agreement_version,
+            agreement_hash: input.agreement_hash,
+            ranking_version: input.ranking_version,
+            ranking_hash: input.ranking_hash,
+            settlement_hash: input.settlement_hash.clone(),
+            total_amount: total_allocated,
+            status: SettlementStatus::Authorized,
+            authorized_at: env.ledger().timestamp(),
+            settled_at: 0,
+        };
+
+        env.storage().persistent().set(&settle_key, &record);
+        env.storage().persistent().set(
+            &DataKey::SettlementAllocations(input.tournament_id),
+            &input.allocations,
+        );
+
+        env.events().publish(
+            (symbol_short!("settle"), symbol_short!("auth")),
+            (input.tournament_id, input.settlement_hash, total_allocated),
+        );
+
+        Ok(record)
+    }
+
+    /// Executes the multi-recipient settlement from the vault.
+    pub fn execute_settlement(
+        env: Env,
+        caller: Address,
+        tournament_id: u64,
+    ) -> Result<SettlementRecord, Error> {
+        caller.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let mut tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != caller {
+            let admin = Self::get_admin(env.clone())?;
+            if admin != caller {
+                return Err(Error::Unauthorized);
+            }
+        }
+
+        let settle_key = DataKey::Settlement(tournament_id);
+        let mut record: SettlementRecord = env
+            .storage()
+            .persistent()
+            .get(&settle_key)
+            .ok_or(Error::SettlementNotFound)?;
+
+        if record.status == SettlementStatus::Settled {
+            return Err(Error::SettlementAlreadyExecuted);
+        }
+
+        let alloc_key = DataKey::SettlementAllocations(tournament_id);
+        let allocations: Vec<RecipientAllocation> = env
+            .storage()
+            .persistent()
+            .get(&alloc_key)
+            .ok_or(Error::SettlementNotFound)?;
+
+        let token_client = token::Client::new(&env, &tournament.prize_asset);
+        let contract_address = env.current_contract_address();
+
+        for alloc in allocations.iter() {
+            token_client.transfer(&contract_address, &alloc.recipient, &alloc.amount);
+            env.events().publish(
+                (symbol_short!("payout"), symbol_short!("recip")),
+                (tournament_id, alloc.recipient, alloc.amount),
+            );
+        }
+
+        tournament.current_funded_amount = tournament
+            .current_funded_amount
+            .checked_sub(record.total_amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage().persistent().set(&tourn_key, &tournament);
+
+        record.status = SettlementStatus::Settled;
+        record.settled_at = env.ledger().timestamp();
+        env.storage().persistent().set(&settle_key, &record);
+
+        env.events().publish(
+            (symbol_short!("settle"), symbol_short!("done")),
+            (tournament_id, record.total_amount, allocations.len()),
+        );
+
+        Ok(record)
+    }
+
+    /// Query the settlement record for a tournament.
+    pub fn get_settlement(env: Env, tournament_id: u64) -> Result<SettlementRecord, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Settlement(tournament_id))
+            .ok_or(Error::SettlementNotFound)
+    }
+
+    /// Query the settlement allocations for a tournament.
+    pub fn get_settlement_allocations(
+        env: Env,
+        tournament_id: u64,
+    ) -> Result<Vec<RecipientAllocation>, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SettlementAllocations(tournament_id))
+            .ok_or(Error::SettlementNotFound)
+    }
+
+    /// Check if a tournament has been settled.
+    pub fn is_settled(env: Env, tournament_id: u64) -> bool {
+        match Self::get_settlement(env, tournament_id) {
+            Ok(s) => s.status == SettlementStatus::Settled,
+            Err(_) => false,
+        }
     }
 }
 

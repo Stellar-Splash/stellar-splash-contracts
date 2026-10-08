@@ -77,6 +77,13 @@ Draft -> PendingApproval -> ReadyToLock -> Locked -> Superseded
 - `get_prize_agreement(tournament_id: u64, version: u32) -> PrizeAgreementRecord`: Queries specific agreement version.
 - `is_agreement_locked(tournament_id: u64, version: u32) -> bool`: Checks if agreement is locked.
 
+### Deterministic Prize Settlement
+- `authorize_settlement(caller: Address, input: SettlementInput) -> SettlementRecord`: Authorizes multi-recipient settlement by verifying exact matches against locked agreement hash, finalized ranking hash, and checking available vault balance.
+- `execute_settlement(caller: Address, tournament_id: u64) -> SettlementRecord`: Dispatches tokens from the escrow vault to each recipient address according to authorized allocations. Prevents double execution.
+- `get_settlement(tournament_id: u64) -> SettlementRecord`: Queries the settlement status (`Authorized` or `Settled`).
+- `get_settlement_allocations(tournament_id: u64) -> Vec<RecipientAllocation>`: Queries the authorized multi-recipient allocation breakdown.
+- `is_settled(tournament_id: u64) -> bool`: Checks if settlement execution is finalized.
+
 ---
 
 ## Contract Events
@@ -90,6 +97,9 @@ The contract emits structured events indexed by `stellar-splash-engine`:
 - `("ranking", "done")` -> `(tournament_id, ranking_version, ranking_hash)`
 - `("agree", "created")` -> `(tournament_id, version, agreement_hash)`
 - `("agree", "locked")` -> `(tournament_id, version, agreement_hash)`
+- `("settle", "auth")` -> `(tournament_id, settlement_hash, total_amount)`
+- `("settle", "done")` -> `(tournament_id, total_amount, recipients_count)`
+- `("payout", "recip")` -> `(tournament_id, recipient, amount)`
 
 ---
 
