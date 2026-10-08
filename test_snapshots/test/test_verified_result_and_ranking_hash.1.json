@@ -87,7 +87,7 @@
                         "symbol": "end_time"
                       },
                       "val": {
-                        "u64": 200
+                        "u64": 2000
                       }
                     },
                     {
@@ -103,7 +103,7 @@
                         "symbol": "max_participants"
                       },
                       "val": {
-                        "u32": 1
+                        "u32": 8
                       }
                     },
                     {
@@ -119,7 +119,7 @@
                         "symbol": "start_time"
                       },
                       "val": {
-                        "u64": 100
+                        "u64": 1000
                       }
                     },
                     {
@@ -138,7 +138,7 @@
                         "symbol": "title"
                       },
                       "val": {
-                        "string": "Mini Duel"
+                        "string": "Attestation Arena"
                       }
                     },
                     {
@@ -146,7 +146,7 @@
                         "symbol": "tournament_id"
                       },
                       "val": {
-                        "u64": 202
+                        "u64": 401
                       }
                     }
                   ]
@@ -171,7 +171,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "u64": 202
+                  "u64": 401
                 },
                 {
                   "i128": {
@@ -223,7 +223,29 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 },
                 {
-                  "u64": 202
+                  "u64": 401
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "register_participant",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                },
+                {
+                  "u64": 401
                 }
               ]
             }
@@ -239,13 +261,92 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "register_participant",
+              "function_name": "record_verified_result",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                 },
                 {
-                  "u64": 202
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "match_id"
+                      },
+                      "val": {
+                        "string": "match-xyz-001"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "player"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "result_hash"
+                      },
+                      "val": {
+                        "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "score"
+                      },
+                      "val": {
+                        "u32": 4250
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "tournament_id"
+                      },
+                      "val": {
+                        "u64": 401
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "verification_version"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
+    [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "record_ranking_hash",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "u64": 401
+                },
+                {
+                  "u32": 1
+                },
+                {
+                  "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
                 }
               ]
             }
@@ -337,10 +438,10 @@
                   "symbol": "Participant"
                 },
                 {
-                  "u64": 202
+                  "u64": 401
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
                 }
               ]
             },
@@ -360,10 +461,10 @@
                       "symbol": "Participant"
                     },
                     {
-                      "u64": 202
+                      "u64": 401
                     },
                     {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
                     }
                   ]
                 },
@@ -385,10 +486,88 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "Ranking"
+                },
+                {
+                  "u64": 401
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Ranking"
+                    },
+                    {
+                      "u64": 401
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "finalized_at"
+                      },
+                      "val": {
+                        "u64": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "ranking_hash"
+                      },
+                      "val": {
+                        "bytes": "0909090909090909090909090909090909090909090909090909090909090909"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "ranking_version"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "tournament_id"
+                      },
+                      "val": {
+                        "u64": 401
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
                   "symbol": "Tournament"
                 },
                 {
-                  "u64": 202
+                  "u64": 401
                 }
               ]
             },
@@ -408,7 +587,7 @@
                       "symbol": "Tournament"
                     },
                     {
-                      "u64": 202
+                      "u64": 401
                     }
                   ]
                 },
@@ -447,7 +626,7 @@
                         "symbol": "end_time"
                       },
                       "val": {
-                        "u64": 200
+                        "u64": 2000
                       }
                     },
                     {
@@ -463,7 +642,7 @@
                         "symbol": "max_participants"
                       },
                       "val": {
-                        "u32": 1
+                        "u32": 8
                       }
                     },
                     {
@@ -479,7 +658,7 @@
                         "symbol": "start_time"
                       },
                       "val": {
-                        "u64": 100
+                        "u64": 1000
                       }
                     },
                     {
@@ -506,7 +685,7 @@
                         "symbol": "title"
                       },
                       "val": {
-                        "string": "Mini Duel"
+                        "string": "Attestation Arena"
                       }
                     },
                     {
@@ -514,7 +693,115 @@
                         "symbol": "tournament_id"
                       },
                       "val": {
-                        "u64": 202
+                        "u64": 401
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "VerifiedResult"
+                },
+                {
+                  "u64": 401
+                },
+                {
+                  "string": "match-xyz-001"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "VerifiedResult"
+                    },
+                    {
+                      "u64": 401
+                    },
+                    {
+                      "string": "match-xyz-001"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "match_id"
+                      },
+                      "val": {
+                        "string": "match-xyz-001"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "player"
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "result_hash"
+                      },
+                      "val": {
+                        "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "score"
+                      },
+                      "val": {
+                        "u32": 4250
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "tournament_id"
+                      },
+                      "val": {
+                        "u64": 401
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "verification_version"
+                      },
+                      "val": {
+                        "u32": 1
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "verified_at"
+                      },
+                      "val": {
+                        "u64": 0
                       }
                     }
                   ]
@@ -655,6 +942,39 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
             "key": {
               "ledger_key_nonce": {
+                "nonce": 1194852393571756375
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 1194852393571756375
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+            "key": {
+              "ledger_key_nonce": {
                 "nonce": 4270020994084947596
               }
             },
@@ -754,7 +1074,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
             "key": {
               "ledger_key_nonce": {
-                "nonce": 8370022561469687789
+                "nonce": 6277191135259896685
               }
             },
             "durability": "temporary"
@@ -767,6 +1087,39 @@
               "contract_data": {
                 "ext": "v0",
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 6277191135259896685
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": 8370022561469687789
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5",
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 8370022561469687789
