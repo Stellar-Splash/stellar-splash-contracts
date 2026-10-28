@@ -67,6 +67,8 @@ fn test_tournament_full_lifecycle() {
     client.start_tournament(&creator, &tournament_id);
     client.complete_tournament(&creator, &tournament_id);
 
+    client.extend_tournament_ttl(&tournament_id);
+
     assert_eq!(client.get_vault_balance(&tournament_id), prize_amount);
 }
 

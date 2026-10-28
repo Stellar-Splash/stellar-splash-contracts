@@ -40,6 +40,11 @@ pub enum Error {
     EmptyAllocations = 29,
 }
 
+/// Ledger threshold (~1 day at 5 seconds per ledger)
+pub const STORAGE_BUMP_THRESHOLD: u32 = 17_280;
+/// Ledger extension target (~30 days at 5 seconds per ledger)
+pub const STORAGE_LIFETIME_BUMP: u32 = 518_400;
+
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -257,6 +262,9 @@ impl TournamentVaultContract {
         };
 
         env.storage().persistent().set(&key, &tournament);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
 
         let count: u64 = env
             .storage()
@@ -730,10 +738,28 @@ impl TournamentVaultContract {
 
     /// Query tournament details.
     pub fn get_tournament(env: Env, tournament_id: u64) -> Result<TournamentInfo, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
         env.storage()
             .persistent()
-            .get(&DataKey::Tournament(tournament_id))
-            .ok_or(Error::TournamentNotFound)
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(info)
+    }
+
+    /// Explicitly extend persistent TTL for a tournament record to prevent archiving.
+    pub fn extend_tournament_ttl(env: Env, tournament_id: u64) -> Result<(), Error> {
+        let key = DataKey::Tournament(tournament_id);
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::TournamentNotFound);
+        }
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
     }
 
     /// Check if player is registered in a tournament.
