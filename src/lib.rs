@@ -1045,6 +1045,29 @@ impl TournamentVaultContract {
         Ok(info.current_participants)
     }
 
+    /// View function returning immutable tournament configuration parameters.
+    pub fn get_tournament_config(
+        env: Env,
+        tournament_id: u64,
+    ) -> Result<TournamentConfig, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+        Ok(TournamentConfig {
+            tournament_id: info.tournament_id,
+            title: info.title,
+            game_id: info.game_id,
+            prize_asset: info.prize_asset,
+            target_prize_amount: info.target_prize_amount,
+            max_participants: info.max_participants,
+            start_time: info.start_time,
+            end_time: info.end_time,
+        })
+    }
+
     // -------------------------------------------------------------
     // DETERMINISTIC SETTLEMENT LAYER
     // -------------------------------------------------------------

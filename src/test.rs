@@ -77,6 +77,11 @@ fn test_tournament_full_lifecycle() {
         client.get_tournament_status(&tournament_id),
         TournamentState::Completed
     );
+
+    let retrieved_cfg = client.get_tournament_config(&tournament_id);
+    assert_eq!(retrieved_cfg.tournament_id, tournament_id);
+    assert_eq!(retrieved_cfg.target_prize_amount, prize_amount);
+    assert_eq!(retrieved_cfg.max_participants, 10);
 }
 
 #[test]
