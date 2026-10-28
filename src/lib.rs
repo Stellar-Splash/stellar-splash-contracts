@@ -462,6 +462,9 @@ impl TournamentVaultContract {
         player: Address,
         tournament_id: u64,
     ) -> Result<(), Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
         player.require_auth();
 
         let tourn_key = DataKey::Tournament(tournament_id);
@@ -494,6 +497,15 @@ impl TournamentVaultContract {
             .ok_or(Error::ArithmeticOverflow)?;
 
         env.storage().persistent().set(&tourn_key, &tournament);
+
+        if tournament.max_participants > 0
+            && tournament.current_participants >= tournament.max_participants
+        {
+            env.events().publish(
+                (symbol_short!("tourn"), symbol_short!("full")),
+                (tournament_id, tournament.current_participants),
+            );
+        }
 
         env.events().publish(
             (symbol_short!("part"), symbol_short!("joined")),

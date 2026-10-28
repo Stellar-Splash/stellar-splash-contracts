@@ -253,9 +253,9 @@ fn test_capacity_and_unauthorized_cases() {
 
     client.register_participant(&p1, &tournament_id);
 
-    // Exceeding capacity fails
+    // Exceeding capacity fails with TournamentFull
     let p2_res = client.try_register_participant(&p2, &tournament_id);
-    assert!(p2_res.is_err());
+    assert_eq!(p2_res, Err(Ok(Error::TournamentFull)));
 }
 
 #[test]
