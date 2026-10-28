@@ -493,3 +493,48 @@ fn test_settlement_security_and_rejections() {
         .try_authorize_settlement(&creator, &input_over)
         .is_err());
 }
+
+#[test]
+fn test_emergency_pause_circuit_breaker() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    assert_eq!(client.is_paused(), false);
+
+    // Pause contract
+    client.pause();
+    assert_eq!(client.is_paused(), true);
+
+    let creator = Address::generate(&env);
+    let token = Address::generate(&env);
+    let config = TournamentConfig {
+        tournament_id: 999,
+        title: String::from_str(&env, "Paused Tournament"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token,
+        target_prize_amount: 100_000,
+        max_participants: 5,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    // Creating tournament should fail when paused
+    assert_eq!(
+        client.try_create_tournament(&creator, &config),
+        Err(Ok(Error::ContractPaused))
+    );
+
+    // Unpause contract
+    client.unpause();
+    assert_eq!(client.is_paused(), false);
+
+    // Creating tournament should now succeed
+    let tourn = client.create_tournament(&creator, &config);
+    assert_eq!(tourn.tournament_id, 999);
+}

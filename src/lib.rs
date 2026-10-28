@@ -38,6 +38,7 @@ pub enum Error {
     RankingHashMismatch = 27,
     AllocationExceedsPool = 28,
     EmptyAllocations = 29,
+    ContractPaused = 30,
 }
 
 /// Ledger threshold (~1 day at 5 seconds per ledger)
@@ -198,6 +199,7 @@ enum DataKey {
     ActiveAgreementVersion(u64),
     Settlement(u64),
     SettlementAllocations(u64),
+    Paused,
 }
 
 #[contract]
@@ -245,12 +247,51 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Pause the contract operations (admin-only emergency control).
+    pub fn pause(env: Env) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events()
+            .publish((symbol_short!("circuit"), symbol_short!("paused")), ());
+        Ok(())
+    }
+
+    /// Unpause the contract operations (admin-only).
+    pub fn unpause(env: Env) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events()
+            .publish((symbol_short!("circuit"), symbol_short!("unpaused")), ());
+        Ok(())
+    }
+
+    /// Query whether contract operations are currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
     /// Create a new tournament record.
     pub fn create_tournament(
         env: Env,
         creator: Address,
         config: TournamentConfig,
     ) -> Result<TournamentInfo, Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
         creator.require_auth();
 
         if config.target_prize_amount <= 0 {
@@ -315,6 +356,9 @@ impl TournamentVaultContract {
         tournament_id: u64,
         amount: i128,
     ) -> Result<TournamentInfo, Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
         funder.require_auth();
 
         if amount <= 0 {
