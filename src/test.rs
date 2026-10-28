@@ -28,6 +28,8 @@ fn test_tournament_full_lifecycle() {
     let admin = Address::generate(&env);
     client.initialize(&admin);
 
+    client.extend_contract_instance_ttl();
+
     assert_eq!(client.get_admin(), admin);
 
     let token_admin = Address::generate(&env);

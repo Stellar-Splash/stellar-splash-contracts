@@ -215,15 +215,34 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::TournamentCount, &0u64);
+        env.storage()
+            .instance()
+            .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
         Ok(())
     }
 
     /// Retrieve the admin address.
     pub fn get_admin(env: Env) -> Result<Address, Error> {
-        env.storage()
+        let admin: Address = env
+            .storage()
             .instance()
             .get(&DataKey::Admin)
-            .ok_or(Error::NotInitialized)
+            .ok_or(Error::NotInitialized)?;
+        env.storage()
+            .instance()
+            .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(admin)
+    }
+
+    /// Explicitly extends instance storage TTL for contract metadata and admin records.
+    pub fn extend_contract_instance_ttl(env: Env) -> Result<(), Error> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
+        env.storage()
+            .instance()
+            .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
     }
 
     /// Create a new tournament record.
