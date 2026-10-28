@@ -621,3 +621,50 @@ fn test_min_prize_amount_rejection() {
 
     client.create_tournament(&creator, &config);
 }
+
+#[test]
+fn test_sep41_allowance_funding() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let relayer = Address::generate(&env);
+
+    let prize: i128 = 20_000_000;
+    token_asset.mint(&funder, &prize);
+
+    // Funder approves relayer as spender for allowance
+    token_client.approve(&funder, &relayer, &prize, &1000);
+
+    let tournament_id: u64 = 901;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Delegated Funding Tournament"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+
+    // Relayer executes funding on behalf of funder using allowance
+    let funded = client.fund_prize_pool_from(&relayer, &funder, &tournament_id, &prize);
+    assert_eq!(funded.state, TournamentState::Funded);
+    assert_eq!(funded.current_funded_amount, prize);
+    assert_eq!(client.get_vault_balance(&tournament_id), prize);
+    assert_eq!(token_client.balance(&contract_id), prize);
+    assert_eq!(token_client.balance(&funder), 0);
+}

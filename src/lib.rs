@@ -422,6 +422,83 @@ impl TournamentVaultContract {
         Ok(tournament)
     }
 
+    /// Fund prize pool using delegated allowance via SEP-41 transfer_from.
+    pub fn fund_prize_pool_from(
+        env: Env,
+        spender: Address,
+        funder: Address,
+        tournament_id: u64,
+        amount: i128,
+    ) -> Result<TournamentInfo, Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
+        spender.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let key = DataKey::Tournament(tournament_id);
+        let mut tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.state != TournamentState::Created
+            && tournament.state != TournamentState::Funding
+        {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        let remaining = tournament
+            .target_prize_amount
+            .checked_sub(tournament.current_funded_amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+
+        if remaining <= 0 {
+            return Err(Error::TournamentAlreadyFunded);
+        }
+
+        let deposit_amount = if amount > remaining {
+            remaining
+        } else {
+            amount
+        };
+
+        let client = token::Client::new(&env, &tournament.prize_asset);
+        client.transfer_from(
+            &spender,
+            &funder,
+            &env.current_contract_address(),
+            &deposit_amount,
+        );
+
+        tournament.current_funded_amount = tournament
+            .current_funded_amount
+            .checked_add(deposit_amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+
+        if tournament.current_funded_amount >= tournament.target_prize_amount {
+            tournament.state = TournamentState::Funded;
+        }
+
+        env.storage().persistent().set(&key, &tournament);
+
+        env.events().publish(
+            (symbol_short!("prize"), symbol_short!("funded")),
+            (
+                tournament_id,
+                funder,
+                deposit_amount,
+                tournament.current_funded_amount,
+            ),
+        );
+
+        Ok(tournament)
+    }
+
     /// Open tournament for registration after funding is complete.
     pub fn open_tournament(
         env: Env,
