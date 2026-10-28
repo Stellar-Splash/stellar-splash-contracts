@@ -231,6 +231,30 @@ fn test_prize_agreement_lifecycle_and_immutability() {
     let impostor = Address::generate(&env);
     let unauth_lock = client.try_lock_prize_agreement(&impostor, &tournament_id, &1);
     assert!(unauth_lock.is_err());
+
+    assert_eq!(client.get_agreement_status(&tournament_id, &1), AgreementStatus::Locked);
+
+    // 6. Test supersede transition on revision
+    let tourn_id_2: u64 = 502;
+    let config_2 = TournamentConfig {
+        tournament_id: tourn_id_2,
+        title: String::from_str(&env, "Supersede Test Cup"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 16,
+        start_time: 1000,
+        end_time: 2000,
+    };
+    client.create_tournament(&creator, &config_2);
+    let hash_v1 = BytesN::from_array(&env, &[1u8; 32]);
+    let hash_v2 = BytesN::from_array(&env, &[2u8; 32]);
+    client.register_prize_agreement(&creator, &tourn_id_2, &1, &hash_v1);
+    assert_eq!(client.get_agreement_status(&tourn_id_2, &1), AgreementStatus::PendingApproval);
+
+    client.register_prize_agreement(&creator, &tourn_id_2, &2, &hash_v2);
+    assert_eq!(client.get_agreement_status(&tourn_id_2, &1), AgreementStatus::Superseded);
+    assert_eq!(client.get_agreement_status(&tourn_id_2, &2), AgreementStatus::PendingApproval);
 }
 
 #[test]

@@ -931,6 +931,26 @@ impl TournamentVaultContract {
             locked_at: 0,
         };
 
+        if version > 1 {
+            let prev_key = DataKey::PrizeAgreement(tournament_id, version - 1);
+            if let Some(mut prev_record) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, PrizeAgreementRecord>(&prev_key)
+            {
+                if prev_record.status == AgreementStatus::PendingApproval
+                    || prev_record.status == AgreementStatus::ReadyToLock
+                {
+                    prev_record.status = AgreementStatus::Superseded;
+                    env.storage().persistent().set(&prev_key, &prev_record);
+                    env.events().publish(
+                        (symbol_short!("agree"), symbol_short!("supers")),
+                        (tournament_id, version - 1, version),
+                    );
+                }
+            }
+        }
+
         env.storage().persistent().set(&agr_key, &record);
         env.storage()
             .persistent()
@@ -1007,6 +1027,16 @@ impl TournamentVaultContract {
             Ok(agr) => agr.status == AgreementStatus::Locked,
             Err(_) => false,
         }
+    }
+
+    /// Retrieve the lifecycle status of a specific prize agreement version.
+    pub fn get_agreement_status(
+        env: Env,
+        tournament_id: u64,
+        version: u32,
+    ) -> Result<AgreementStatus, Error> {
+        let agr = Self::get_prize_agreement(env, tournament_id, version)?;
+        Ok(agr.status)
     }
 
     /// Query tournament details.
