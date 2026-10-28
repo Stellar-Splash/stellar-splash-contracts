@@ -934,6 +934,28 @@ impl TournamentVaultContract {
         Ok(t.current_funded_amount)
     }
 
+    /// Lightweight view function returning the tournament state without heavy deserialization.
+    pub fn get_tournament_status(env: Env, tournament_id: u64) -> Result<TournamentState, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+        Ok(info.state)
+    }
+
+    /// View function returning current active registered participant count.
+    pub fn get_participant_count(env: Env, tournament_id: u64) -> Result<u32, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+        Ok(info.current_participants)
+    }
+
     // -------------------------------------------------------------
     // DETERMINISTIC SETTLEMENT LAYER
     // -------------------------------------------------------------

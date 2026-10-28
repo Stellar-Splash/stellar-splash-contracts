@@ -72,6 +72,11 @@ fn test_tournament_full_lifecycle() {
     client.extend_tournament_ttl(&tournament_id);
 
     assert_eq!(client.get_vault_balance(&tournament_id), prize_amount);
+    assert_eq!(client.get_participant_count(&tournament_id), 2);
+    assert_eq!(
+        client.get_tournament_status(&tournament_id),
+        TournamentState::Completed
+    );
 }
 
 #[test]
