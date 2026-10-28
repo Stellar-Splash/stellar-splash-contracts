@@ -1,4 +1,26 @@
+# Rust target output
 /target
 **/*.rs.bk
 *.wasm
+
+# Environment variables & secrets
+.env
+*.env
+*.secret
+*.pem
+*.key
+
+# IDE & Editor artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS & Filesystem files
 .DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Soroban test and simulation caches
+.soroban/
