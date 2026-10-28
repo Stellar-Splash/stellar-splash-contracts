@@ -571,6 +571,100 @@ impl TournamentVaultContract {
         Ok(tournament)
     }
 
+    /// Cancel a tournament before in-progress/settlement and mark for refund.
+    pub fn cancel_tournament(
+        env: Env,
+        caller: Address,
+        tournament_id: u64,
+    ) -> Result<TournamentInfo, Error> {
+        caller.require_auth();
+
+        let key = DataKey::Tournament(tournament_id);
+        let mut tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let is_admin = match Self::get_admin(env.clone()) {
+            Ok(adm) => adm == caller,
+            Err(_) => false,
+        };
+
+        if tournament.creator != caller && !is_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        if tournament.state == TournamentState::Completed
+            || tournament.state == TournamentState::Cancelled
+        {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        tournament.state = TournamentState::Cancelled;
+        env.storage().persistent().set(&key, &tournament);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+
+        env.events().publish(
+            (symbol_short!("tourn"), symbol_short!("cancel")),
+            (tournament_id, caller),
+        );
+
+        Ok(tournament)
+    }
+
+    /// Claim refund for a cancelled tournament.
+    pub fn claim_refund(
+        env: Env,
+        funder: Address,
+        tournament_id: u64,
+    ) -> Result<i128, Error> {
+        funder.require_auth();
+
+        let key = DataKey::Tournament(tournament_id);
+        let mut tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.state != TournamentState::Cancelled {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        let refund_amount = tournament.current_funded_amount;
+        if refund_amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let is_admin = match Self::get_admin(env.clone()) {
+            Ok(adm) => adm == funder,
+            Err(_) => false,
+        };
+
+        if tournament.creator != funder && !is_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let client = token::Client::new(&env, &tournament.prize_asset);
+        client.transfer(&env.current_contract_address(), &funder, &refund_amount);
+
+        tournament.current_funded_amount = 0;
+        env.storage().persistent().set(&key, &tournament);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+
+        env.events().publish(
+            (symbol_short!("prize"), symbol_short!("refund")),
+            (tournament_id, funder, refund_amount),
+        );
+
+        Ok(refund_amount)
+    }
+
     // -------------------------------------------------------------
     // RESULT ATTESTATION & VERIFICATION LAYER
     // -------------------------------------------------------------
