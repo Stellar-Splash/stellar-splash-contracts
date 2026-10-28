@@ -364,7 +364,7 @@
   "ledger": {
     "protocol_version": 22,
     "sequence_number": 0,
-    "timestamp": 0,
+    "timestamp": 201,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -533,7 +533,7 @@
                         "symbol": "created_at"
                       },
                       "val": {
-                        "u64": 0
+                        "u64": 201
                       }
                     },
                     {
@@ -541,7 +541,7 @@
                         "symbol": "locked_at"
                       },
                       "val": {
-                        "u64": 0
+                        "u64": 201
                       }
                     },
                     {
@@ -619,7 +619,7 @@
                         "symbol": "finalized_at"
                       },
                       "val": {
-                        "u64": 0
+                        "u64": 201
                       }
                     },
                     {

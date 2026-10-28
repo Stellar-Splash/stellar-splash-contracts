@@ -39,6 +39,7 @@ pub enum Error {
     AllocationExceedsPool = 28,
     EmptyAllocations = 29,
     ContractPaused = 30,
+    TournamentNotEnded = 31,
 }
 
 /// Ledger threshold (~1 day at 5 seconds per ledger)
@@ -652,7 +653,12 @@ impl TournamentVaultContract {
             .get(&key)
             .ok_or(Error::TournamentNotFound)?;
 
-        if tournament.creator != caller {
+        let is_admin = match Self::get_admin(env.clone()) {
+            Ok(adm) => adm == caller,
+            Err(_) => false,
+        };
+
+        if tournament.creator != caller && !is_admin {
             return Err(Error::Unauthorized);
         }
 
@@ -660,6 +666,14 @@ impl TournamentVaultContract {
             && tournament.state != TournamentState::Open
         {
             return Err(Error::InvalidTournamentState);
+        }
+
+        let current_time = env.ledger().timestamp();
+        let capacity_reached = tournament.max_participants > 0
+            && tournament.current_participants >= tournament.max_participants;
+
+        if !is_admin && tournament.end_time > 0 && current_time < tournament.end_time && !capacity_reached {
+            return Err(Error::TournamentNotEnded);
         }
 
         tournament.state = TournamentState::Completed;

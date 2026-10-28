@@ -2,8 +2,10 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::Address as _, token::Client as TokenClient, token::StellarAssetClient, Address,
-    BytesN, Env, String,
+    testutils::{Address as _, Ledger as _},
+    token::Client as TokenClient,
+    token::StellarAssetClient,
+    Address, BytesN, Env, String,
 };
 
 fn create_token_contract<'a>(
@@ -67,6 +69,7 @@ fn test_tournament_full_lifecycle() {
     client.register_participant(&player2, &tournament_id);
 
     client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(1700086401);
     client.complete_tournament(&creator, &tournament_id);
 
     client.extend_tournament_ttl(&tournament_id);
@@ -342,6 +345,7 @@ fn test_settlement_authorization_and_execution() {
     client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
     client.open_tournament(&creator, &tournament_id);
     client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(201);
     client.complete_tournament(&creator, &tournament_id);
 
     // Commit final ranking
@@ -448,6 +452,7 @@ fn test_settlement_security_and_rejections() {
     client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
     client.open_tournament(&creator, &tournament_id);
     client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(201);
     client.complete_tournament(&creator, &tournament_id);
 
     let ranking_hash = BytesN::from_array(&env, &[0x42; 32]);
@@ -683,4 +688,47 @@ fn test_sep41_allowance_funding() {
     assert_eq!(client.get_vault_balance(&tournament_id), prize);
     assert_eq!(token_client.balance(&contract_id), prize);
     assert_eq!(token_client.balance(&funder), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #31)")]
+fn test_premature_completion_rejection() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+
+    let prize: i128 = 20_000_000;
+    token_asset.mint(&funder, &prize);
+
+    let tournament_id: u64 = 999;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Premature Completion Guard Test"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 5000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize);
+    client.open_tournament(&creator, &tournament_id);
+    client.start_tournament(&creator, &tournament_id);
+
+    // Ledger timestamp is 2000, which is before end_time 5000 and max capacity 10 is not reached
+    env.ledger().set_timestamp(2000);
+    client.complete_tournament(&creator, &tournament_id);
 }
