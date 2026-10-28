@@ -201,6 +201,7 @@ enum DataKey {
     ActiveAgreementVersion(u64),
     Settlement(u64),
     SettlementAllocations(u64),
+    ParticipantList(u64),
     Paused,
 }
 
@@ -567,6 +568,16 @@ impl TournamentVaultContract {
         }
 
         env.storage().persistent().set(&part_key, &true);
+
+        let mut part_list: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ParticipantList(tournament_id))
+            .unwrap_or(Vec::new(&env));
+        part_list.push_back(player.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::ParticipantList(tournament_id), &part_list);
 
         tournament.current_participants = tournament
             .current_participants
@@ -1066,6 +1077,38 @@ impl TournamentVaultContract {
             start_time: info.start_time,
             end_time: info.end_time,
         })
+    }
+
+    /// Retrieve paginated slice of registered tournament participants.
+    pub fn get_participants_page(
+        env: Env,
+        tournament_id: u64,
+        start_index: u32,
+        limit: u32,
+    ) -> Result<Vec<Address>, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::TournamentNotFound);
+        }
+
+        let list: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ParticipantList(tournament_id))
+            .unwrap_or(Vec::new(&env));
+
+        let len = list.len();
+        if start_index >= len {
+            return Ok(Vec::new(&env));
+        }
+
+        let end_index = (start_index + limit).min(len);
+        let mut page = Vec::new(&env);
+        for i in start_index..end_index {
+            page.push_back(list.get(i).unwrap());
+        }
+
+        Ok(page)
     }
 
     // -------------------------------------------------------------

@@ -82,6 +82,17 @@ fn test_tournament_full_lifecycle() {
     assert_eq!(retrieved_cfg.tournament_id, tournament_id);
     assert_eq!(retrieved_cfg.target_prize_amount, prize_amount);
     assert_eq!(retrieved_cfg.max_participants, 10);
+
+    let page1 = client.get_participants_page(&tournament_id, &0, &1);
+    assert_eq!(page1.len(), 1);
+    assert_eq!(page1.get(0).unwrap(), player1);
+
+    let page2 = client.get_participants_page(&tournament_id, &1, &1);
+    assert_eq!(page2.len(), 1);
+    assert_eq!(page2.get(0).unwrap(), player2);
+
+    let page_empty = client.get_participants_page(&tournament_id, &5, &10);
+    assert_eq!(page_empty.len(), 0);
 }
 
 #[test]
