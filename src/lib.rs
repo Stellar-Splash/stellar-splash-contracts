@@ -45,6 +45,8 @@ pub enum Error {
 pub const STORAGE_BUMP_THRESHOLD: u32 = 17_280;
 /// Ledger extension target (~30 days at 5 seconds per ledger)
 pub const STORAGE_LIFETIME_BUMP: u32 = 518_400;
+/// Minimum allowable tournament prize pool amount (1 XLM = 10,000,000 Stroops)
+pub const MIN_PRIZE_AMOUNT: i128 = 10_000_000;
 
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -294,7 +296,7 @@ impl TournamentVaultContract {
         }
         creator.require_auth();
 
-        if config.target_prize_amount <= 0 {
+        if config.target_prize_amount < MIN_PRIZE_AMOUNT {
             return Err(Error::InvalidAmount);
         }
         if config.end_time <= config.start_time {

@@ -518,7 +518,7 @@ fn test_emergency_pause_circuit_breaker() {
         title: String::from_str(&env, "Paused Tournament"),
         game_id: String::from_str(&env, "splash-rush-v1"),
         prize_asset: token,
-        target_prize_amount: 100_000,
+        target_prize_amount: 10_000_000,
         max_participants: 5,
         start_time: 1000,
         end_time: 2000,
@@ -584,4 +584,35 @@ fn test_tournament_cancel_and_refund() {
     assert_eq!(refunded, prize);
     assert_eq!(client.get_vault_balance(&tournament_id), 0);
     assert_eq!(token_client.balance(&creator), prize);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")] // Error::InvalidAmount = 7
+fn test_min_prize_amount_rejection() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, _) = create_token_contract(&env, &token_admin);
+    let creator = Address::generate(&env);
+
+    // Target prize is less than MIN_PRIZE_AMOUNT (10_000_000)
+    let config = TournamentConfig {
+        tournament_id: 888,
+        title: String::from_str(&env, "Dust Spam Tournament"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: 5_000_000,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
 }
