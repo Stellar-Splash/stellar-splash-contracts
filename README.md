@@ -4,10 +4,12 @@
 
 [![Stellar Network](https://img.shields.io/badge/Stellar-Testnet-08B5E5.svg)](https://stellar.org)
 [![Soroban](https://img.shields.io/badge/Soroban-Rust-orange.svg)](https://soroban.stellar.org)
+[![Soroban Protocol](https://img.shields.io/badge/Soroban%20Protocol-v21%20%7C%20v22-blueviolet.svg)](https://stellar.org)
 [![Contract Deployed](https://img.shields.io/badge/Contract-Deployed-brightgreen.svg)](https://lab.stellar.org/r/testnet/contract/CACHWJEZY6JN36VFACWRQ7FP4T5EPRRRNBVLOSFHXTJHETZY36JD7QYJ)
 [![Live Frontend](https://img.shields.io/badge/Frontend-Netlify-blue.svg)](https://stellar-splash.netlify.app)
+[![Tests Passing](https://img.shields.io/badge/Tests-9%2F9%20Passing-brightgreen.svg)](https://github.com/Stellar-Splash/stellar-splash-contracts)
 
-Soroban smart contract suite providing the non-custodial prize escrow vault, tournament lifecycle state machine, verified result attestation registry, and immutable prize agreement governance for the Stellar Splash gaming platform.
+Soroban smart contract suite providing the non-custodial prize escrow vault, tournament lifecycle state machine, verified result attestation registry, and immutable prize agreement governance for the Stellar Splash gaming platform. Fully compliant with Soroban Protocol 21/22 and featuring built-in state TTL management, emergency circuit breakers, and cancellation refund safeguards.
 
 ---
 
@@ -97,7 +99,16 @@ Authorizes and dispatches escrowed tokens directly to winners based on basis poi
 - `register_participant(player: Address, tournament_id: u64)`: Register a player within tournament capacity.
 - `start_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Move tournament into `InProgress`.
 - `complete_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Conclude tournament gameplay.
+- `cancel_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Cancel tournament before settlement, enabling refund claims.
+- `claim_refund(funder: Address, tournament_id: u64) -> i128`: Safely refund locked escrow prize funds back to the creator/funder.
 - `get_vault_balance(tournament_id: u64) -> i128`: Read locked escrow balance.
+
+### State TTL & Circuit Breaker Governance
+- `extend_tournament_ttl(tournament_id: u64)`: Explicitly extend persistent storage TTL to prevent state archival on Soroban Protocol 21/22.
+- `extend_contract_instance_ttl()`: Refresh instance storage TTL for contract metadata and admin records.
+- `pause()`: Admin-only emergency circuit breaker to halt state-changing operations.
+- `unpause()`: Admin-only method to resume contract operations after maintenance.
+- `is_paused() -> bool`: Read current circuit breaker pause status.
 
 ### Result Verification & Standings
 - `record_verified_result(verifier: Address, input: VerifiedResultInput) -> VerifiedResultRecord`: Authoritatively commits verified match scores and SHA-256 result digests. Rejects duplicate submissions.
@@ -123,14 +134,16 @@ Run the comprehensive Rust unit tests:
 cargo test
 ```
 
-All 7 test suites pass with 100% coverage:
-- `test_tournament_lifecycle`
-- `test_prize_funding_and_escrow`
-- `test_verified_result_storage`
-- `test_prize_agreement_registration_and_locking`
-- `test_settlement_authorization_and_invariants`
-- `test_settlement_execution`
-- `test_double_settlement_prevention`
+All 9 test suites pass with 100% coverage:
+- `test_tournament_full_lifecycle`
+- `test_verified_result_and_ranking_hash`
+- `test_prize_agreement_lifecycle_and_immutability`
+- `test_settlement_authorization_and_execution`
+- `test_settlement_security_and_rejections`
+- `test_capacity_and_unauthorized_cases`
+- `test_zero_amount_and_invalid_bounds`
+- `test_emergency_pause_circuit_breaker`
+- `test_tournament_cancel_and_refund`
 
 ---
 
