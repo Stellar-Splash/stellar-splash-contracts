@@ -3307,6 +3307,28 @@ impl TournamentVaultContract {
         env.storage().instance().get(&DataKey::ProposedAdmin)
     }
 
+    /// Allows the current admin to cancel a pending administrative transfer.
+    pub fn cancel_admin_transfer(env: Env, admin: Address) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("cancel_t")),
+            admin,
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
