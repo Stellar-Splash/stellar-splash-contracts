@@ -1,0 +1,26 @@
+name: WASM Size Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  wasm-size:
+    name: Check WASM Size Limit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build WASM Target
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Enforce Size Limit
+        run: bash scripts/check-wasm-size.sh
+
