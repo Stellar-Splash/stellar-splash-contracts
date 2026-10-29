@@ -2035,6 +2035,22 @@ impl TournamentVaultContract {
 
         Ok(entry_fee)
     }
+
+    /// Retrieves total entry fees accumulated in escrow for a tournament.
+    pub fn get_total_entry_fees(env: Env, tournament_id: u64) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TotalEntryFees(tournament_id))
+            .unwrap_or(0)
+    }
+
+    /// Checks if a player has deposited the entry fee for a tournament.
+    pub fn has_paid_entry_fee(env: Env, tournament_id: u64, player: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PlayerEntryFeePaid(tournament_id, player))
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(test)]
