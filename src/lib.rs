@@ -3274,6 +3274,34 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Step 2 of two-step administrative transfer: proposed admin accepts ownership.
+    pub fn accept_admin_transfer(
+        env: Env,
+        proposed_admin: Address,
+    ) -> Result<(), Error> {
+        let stored_proposed: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposedAdmin)
+            .ok_or(Error::ProposedAdminNotFound)?;
+        if proposed_admin != stored_proposed {
+            return Err(Error::Unauthorized);
+        }
+        proposed_admin.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Admin, &proposed_admin);
+        env.storage().instance().remove(&DataKey::ProposedAdmin);
+
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("accept")),
+            proposed_admin,
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
