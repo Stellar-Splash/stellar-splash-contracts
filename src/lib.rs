@@ -3302,6 +3302,11 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Returns the currently pending proposed admin address, if any.
+    pub fn get_proposed_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::ProposedAdmin)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
