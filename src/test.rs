@@ -1425,3 +1425,82 @@ fn test_player_stats_and_active_tournaments() {
     let won_stats = client.get_player_stats(&player);
     assert_eq!(won_stats.tournaments_won, 1);
 }
+
+#[test]
+fn test_dispute_dismissal_and_contract_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    // 1. Contract version verification
+    assert_eq!(client.get_contract_version(), 21);
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let challenger = Address::generate(&env);
+
+    let prize_pool: i128 = 20_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id = 701;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Dispute Dismissal Cup"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 8,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+    client.open_tournament(&creator, &tournament_id);
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(2001);
+    client.complete_tournament(&creator, &tournament_id);
+
+    // Initial dispute status before filing
+    assert_eq!(client.get_dispute_status(&tournament_id), None);
+
+    // Open dispute window & submit dispute
+    client.open_dispute_window(&creator, &tournament_id, &360);
+    let dispute = client.submit_dispute(&challenger, &tournament_id, &102);
+    assert_eq!(dispute.reason_code, 102);
+    assert_eq!(dispute.status, DisputeStatus::Active);
+    assert_eq!(client.is_tournament_disputed(&tournament_id), true);
+
+    // Status query returns pending record
+    let status = client
+        .get_dispute_status(&tournament_id)
+        .expect("dispute record exists");
+    assert_eq!(status.status, DisputeStatus::Active);
+    assert_eq!(status.reason_code, 102);
+    assert_eq!(status.challenger, challenger);
+
+    // Non-admin attempting to dismiss dispute fails
+    assert_eq!(
+        client.try_dismiss_dispute(&non_admin, &tournament_id),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // Admin dismisses dispute
+    client.dismiss_dispute(&admin, &tournament_id);
+    assert_eq!(client.is_tournament_disputed(&tournament_id), false);
+
+    // Status query shows Dismissed
+    let dismissed_status = client
+        .get_dispute_status(&tournament_id)
+        .expect("dispute record exists");
+    assert_eq!(dismissed_status.status, DisputeStatus::Dismissed);
+}
