@@ -166,3 +166,20 @@ soroban contract deploy \
   --source splash-admin \
   --network testnet
 ```
+
+
+---
+
+## 📚 Protocol Documentation, Security Architecture & Verification Tools
+
+| Specification / Tool | Purpose & Documentation Link |
+| :--- | :--- |
+| **Soroban Protocol Specification** | [docs/PROTOCOL_SPECIFICATION.md](docs/PROTOCOL_SPECIFICATION.md) - State transitions, TTL, & authorization |
+| **Threat Model & Security Invariants** | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) - Frontrunning, reentrancy, and emergency pause |
+| **Fair Play Cryptographic Attestation** | [docs/FAIR_PLAY_CRYPTO_SPEC.md](docs/FAIR_PLAY_CRYPTO_SPEC.md) - Deterministic physics & Merkle claims |
+| **Storage Economics & Fee Whitepaper** | [docs/STORAGE_ECONOMICS.md](docs/STORAGE_ECONOMICS.md) - Soroban state rent optimization |
+| **Upgrade & Hotfix Runbook** | [docs/UPGRADE_RUNBOOK.md](docs/UPGRADE_RUNBOOK.md) - 2-step governance & rollback procedures |
+| **Execute Formal Invariants Suite** | `bash scripts/run-invariants.sh` |
+| **Profile Optimized WASM Bytecode** | `bash scripts/profile-wasm-size.sh` |
+| **Audit Storage TTL Lifetimes** | `bash scripts/audit-storage-ttl.sh` |
+| **Run Complete Master Verification** | `bash scripts/verify-all.sh` |

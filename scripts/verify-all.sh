@@ -23,3 +23,4 @@ bash scripts/check-wasm-size.sh
 echo "=========================================="
 echo "✅ All verification checks passed cleanly!"
 echo "=========================================="
+
