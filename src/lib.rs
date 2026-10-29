@@ -2621,6 +2621,19 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the ledger timestamp when the canonical ranking commitment was recorded.
+    pub fn get_ranking_timestamp(env: Env, tournament_id: u64) -> Option<u64> {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, RankingRecord>(&DataKey::Ranking(tournament_id))
+        {
+            Some(record.finalized_at)
+        } else {
+            None
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
