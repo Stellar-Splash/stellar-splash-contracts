@@ -3434,6 +3434,11 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the challenger address who initiated a tournament dispute, if one exists.
+    pub fn get_dispute_challenger(env: Env, tournament_id: u64) -> Option<Address> {
+        Self::get_dispute_status(env, tournament_id).map(|r| r.challenger)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
