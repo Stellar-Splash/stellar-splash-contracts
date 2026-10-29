@@ -2238,6 +2238,13 @@ impl TournamentVaultContract {
         }
         active
     }
+
+    /// Returns the recorded dispute status and metadata for a tournament, if one was ever filed.
+    pub fn get_dispute_status(env: Env, tournament_id: u64) -> Option<DisputeRecord> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TournamentDispute(tournament_id))
+    }
 }
 
 #[cfg(test)]
