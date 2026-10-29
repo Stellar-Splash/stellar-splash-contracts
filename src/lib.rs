@@ -3065,6 +3065,23 @@ impl TournamentVaultContract {
         false
     }
 
+    /// Returns the exact token payout amount allocated to a winning player, or 0.
+    pub fn get_player_payout_amount(env: Env, tournament_id: u64, player: Address) -> i128 {
+        let alloc_key = DataKey::SettlementAllocations(tournament_id);
+        if let Some(allocations) = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<RecipientAllocation>>(&alloc_key)
+        {
+            for a in allocations.iter() {
+                if a.recipient == player {
+                    return a.amount;
+                }
+            }
+        }
+        0
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
