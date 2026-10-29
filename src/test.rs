@@ -772,3 +772,37 @@ fn test_contract_metadata_descriptor() {
     assert_eq!(meta.protocol_version, 1);
     assert_eq!(meta.min_prize_amount, 10_000_000);
 }
+
+#[test]
+fn test_max_string_length_rejection() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let creator = Address::generate(&env);
+    let token = Address::generate(&env);
+
+    // 130 character title (> 128 characters)
+    let long_title = String::from_str(
+        &env,
+        "This is an extraordinarily bloated tournament title designed intentionally to exceed the maximum permissible 128 byte limit 1234567890",
+    );
+
+    let config = TournamentConfig {
+        tournament_id: 888,
+        title: long_title,
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token,
+        target_prize_amount: 10_000_000,
+        max_participants: 5,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    assert_eq!(
+        client.try_create_tournament(&creator, &config),
+        Err(Ok(Error::TitleTooLong))
+    );
+}

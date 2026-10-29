@@ -40,8 +40,12 @@ pub enum Error {
     EmptyAllocations = 29,
     ContractPaused = 30,
     TournamentNotEnded = 31,
+    TitleTooLong = 32,
+    GameIdTooLong = 33,
 }
 
+/// Maximum permissible byte length for title and game_id strings (storage safety limit)
+pub const MAX_STRING_LENGTH: u32 = 128;
 /// Ledger threshold (~1 day at 5 seconds per ledger)
 pub const STORAGE_BUMP_THRESHOLD: u32 = 17_280;
 /// Ledger extension target (~30 days at 5 seconds per ledger)
@@ -327,6 +331,12 @@ impl TournamentVaultContract {
         }
         if config.end_time <= config.start_time {
             return Err(Error::InvalidTimeBounds);
+        }
+        if config.title.len() > MAX_STRING_LENGTH {
+            return Err(Error::TitleTooLong);
+        }
+        if config.game_id.len() > MAX_STRING_LENGTH {
+            return Err(Error::GameIdTooLong);
         }
 
         let key = DataKey::Tournament(config.tournament_id);
