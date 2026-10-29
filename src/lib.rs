@@ -1673,16 +1673,10 @@ impl TournamentVaultContract {
             .get(&alloc_key)
             .ok_or(Error::SettlementNotFound)?;
 
-        let token_client = token::Client::new(&env, &tournament.prize_asset);
-        let contract_address = env.current_contract_address();
-
-        for alloc in allocations.iter() {
-            token_client.transfer(&contract_address, &alloc.recipient, &alloc.amount);
-            env.events().publish(
-                (symbol_short!("payout"), symbol_short!("recip")),
-                (tournament_id, alloc.recipient, alloc.amount),
-            );
-        }
+        // Apply state effects BEFORE external interactions (Checks-Effects-Interactions)
+        record.status = SettlementStatus::Settled;
+        record.settled_at = env.ledger().timestamp();
+        env.storage().persistent().set(&settle_key, &record);
 
         tournament.current_funded_amount = tournament
             .current_funded_amount
@@ -1703,9 +1697,16 @@ impl TournamentVaultContract {
             .instance()
             .set(&total_settled_key, &new_settled);
 
-        record.status = SettlementStatus::Settled;
-        record.settled_at = env.ledger().timestamp();
-        env.storage().persistent().set(&settle_key, &record);
+        let token_client = token::Client::new(&env, &tournament.prize_asset);
+        let contract_address = env.current_contract_address();
+
+        for alloc in allocations.iter() {
+            token_client.transfer(&contract_address, &alloc.recipient, &alloc.amount);
+            env.events().publish(
+                (symbol_short!("payout"), symbol_short!("recip")),
+                (tournament_id, alloc.recipient, alloc.amount),
+            );
+        }
 
         env.events().publish(
             (symbol_short!("settle"), symbol_short!("done")),

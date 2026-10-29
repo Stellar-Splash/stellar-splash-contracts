@@ -1296,6 +1296,22 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "TournamentIdList"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "u64": 302
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "TreasuryAddress"
                             }
                           ]

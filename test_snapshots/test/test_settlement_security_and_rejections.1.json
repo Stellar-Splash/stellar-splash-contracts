@@ -924,6 +924,22 @@
                         "val": {
                           "u64": 1
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "TournamentIdList"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "vec": [
+                            {
+                              "u64": 601
+                            }
+                          ]
+                        }
                       }
                     ]
                   }

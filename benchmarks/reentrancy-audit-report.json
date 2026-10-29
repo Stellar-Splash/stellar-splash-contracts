@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-10-29T04:49:42.980Z",
+  "allPassed": true,
+  "checks": [
+    {
+      "id": "CEI-001",
+      "name": "Checks-Effects-Interactions (CEI) Pattern Conformance",
+      "description": "Vault state must be updated or locked before executing token transfers",
+      "passed": true,
+      "evidence": "SettlementStatus::Settled and storage state effects applied BEFORE token transfers"
+    },
+    {
+      "id": "ESC-002",
+      "name": "Settlement Re-Execution Guard",
+      "description": "Settled tournaments cannot be re-executed for duplicate payouts",
+      "passed": true,
+      "evidence": "Error::SettlementAlreadyExecuted and SettlementStatus::Settled guard verified"
+    },
+    {
+      "id": "ESC-003",
+      "name": "Dispute Settlement Lockout",
+      "description": "Disputed tournaments cannot be settled until admin resolution or dismissal",
+      "passed": true,
+      "evidence": "TournamentDisputed error guard verified in settlement entrypoints"
+    },
+    {
+      "id": "ESC-004",
+      "name": "Vault Token Solvency Verification",
+      "description": "Vault balances are queried to verify sufficient reserves prior to disbursement",
+      "passed": true,
+      "evidence": "Token balance verification logic confirmed in contract"
+    },
+    {
+      "id": "SEC-005",
+      "name": "Emergency Circuit Breaker Enforcement",
+      "description": "Contract pause flag halts critical state-altering mutations",
+      "passed": true,
+      "evidence": "ensure_not_paused guard verified across contract entrypoints"
+    }
+  ]
+}
