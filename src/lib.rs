@@ -2842,6 +2842,12 @@ impl TournamentVaultContract {
         env.storage().persistent().get(&contrib_key).unwrap_or(0)
     }
 
+    /// Returns the total cumulative sponsorship amount contributed to a tournament prize pool.
+    pub fn get_total_sponsored_amount(env: Env, tournament_id: u64) -> i128 {
+        let tot_spon_key = DataKey::TotalSponsoredAmount(tournament_id);
+        env.storage().persistent().get(&tot_spon_key).unwrap_or(0)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
