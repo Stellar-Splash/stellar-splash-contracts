@@ -51,6 +51,8 @@ pub enum Error {
     TournamentDisputed = 40,
     DisputeWindowElapsed = 41,
     EntryFeeAlreadyPaid = 42,
+    InvalidSponsorAmount = 43,
+    TournamentNotCancellable = 44,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
@@ -336,6 +338,12 @@ enum DataKey {
     PlayerStats(Address),
     TournamentIdList,
     TournamentDispute(u64),
+    TournamentSponsors(u64),
+    SponsorContribution(u64, Address),
+    TotalSponsoredAmount(u64),
+    MinPrizeAmount,
+    MaxParticipantsLimit,
+    DefaultDisputeWindow,
 }
 
 #[contract]
@@ -2730,6 +2738,87 @@ impl TournamentVaultContract {
             .persistent()
             .extend_ttl(&set_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
         Ok(())
+    }
+
+    /// Allows any address to contribute sponsorship tokens to an active tournament's prize pool.
+    pub fn sponsor_tournament(
+        env: Env,
+        sponsor: Address,
+        tournament_id: u64,
+        amount: i128,
+    ) -> Result<i128, Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        sponsor.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let mut tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.state == TournamentState::Completed
+            || tournament.state == TournamentState::Cancelled
+        {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        let token_client = token::Client::new(&env, &tournament.prize_asset);
+        token_client.transfer(&sponsor, &env.current_contract_address(), &amount);
+
+        tournament.current_funded_amount = tournament
+            .current_funded_amount
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage().persistent().set(&tourn_key, &tournament);
+
+        let contrib_key = DataKey::SponsorContribution(tournament_id, sponsor.clone());
+        let prev_contrib: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
+        let new_contrib = prev_contrib
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage().persistent().set(&contrib_key, &new_contrib);
+
+        let sponsors_key = DataKey::TournamentSponsors(tournament_id);
+        let mut sponsors: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&sponsors_key)
+            .unwrap_or(Vec::new(&env));
+        let mut already_in = false;
+        for s in sponsors.iter() {
+            if s == sponsor {
+                already_in = true;
+                break;
+            }
+        }
+        if !already_in {
+            sponsors.push_back(sponsor.clone());
+            env.storage().persistent().set(&sponsors_key, &sponsors);
+        }
+
+        let tot_spon_key = DataKey::TotalSponsoredAmount(tournament_id);
+        let prev_total_spon: i128 = env.storage().persistent().get(&tot_spon_key).unwrap_or(0);
+        let new_total_spon = prev_total_spon
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage().persistent().set(&tot_spon_key, &new_total_spon);
+
+        env.storage()
+            .persistent()
+            .extend_ttl(&tourn_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+
+        env.events().publish(
+            (symbol_short!("tourn"), symbol_short!("sponsor")),
+            (tournament_id, sponsor, amount),
+        );
+
+        Ok(tournament.current_funded_amount)
     }
 
     /// Returns the active contract/protocol version (Protocol 21).
