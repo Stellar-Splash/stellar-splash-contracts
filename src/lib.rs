@@ -241,6 +241,7 @@ enum DataKey {
     TreasuryAddress,
     TreasuryFeeBps,
     TotalSettledAmount,
+    TournamentMetadataUri(u64),
 }
 
 #[contract]
@@ -1283,6 +1284,49 @@ impl TournamentVaultContract {
             start_time: info.start_time,
             end_time: info.end_time,
         })
+    }
+
+    /// Sets an external metadata URI (e.g. IPFS CID or Arweave transaction) for a tournament (creator or admin only).
+    pub fn set_tournament_metadata_uri(
+        env: Env,
+        caller: Address,
+        tournament_id: u64,
+        uri: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != caller {
+            let admin = Self::get_admin(env.clone())?;
+            if admin != caller {
+                return Err(Error::Unauthorized);
+            }
+        }
+
+        let key = DataKey::TournamentMetadataUri(tournament_id);
+        env.storage().persistent().set(&key, &uri);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+
+        env.events().publish(
+            (symbol_short!("tourn"), symbol_short!("meta")),
+            (tournament_id, uri),
+        );
+        Ok(())
+    }
+
+    /// Retrieves the metadata URI (IPFS/Arweave) for a tournament, if set.
+    pub fn get_tournament_metadata_uri(env: Env, tournament_id: u64) -> Option<String> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TournamentMetadataUri(tournament_id))
     }
 
     /// Retrieve paginated slice of registered tournament participants.
