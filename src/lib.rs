@@ -2634,6 +2634,27 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the ledger timestamp when the prize agreement version was locked, if locked.
+    pub fn get_prize_agreement_timestamp(
+        env: Env,
+        tournament_id: u64,
+        version: u32,
+    ) -> Option<u64> {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, PrizeAgreementRecord>(&DataKey::PrizeAgreement(tournament_id, version))
+        {
+            if record.locked_at > 0 {
+                Some(record.locked_at)
+            } else {
+                Some(record.created_at)
+            }
+        } else {
+            None
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
