@@ -2848,6 +2848,44 @@ impl TournamentVaultContract {
         env.storage().persistent().get(&tot_spon_key).unwrap_or(0)
     }
 
+    /// Allows a sponsor to reclaim their sponsorship tokens if the tournament was cancelled.
+    pub fn claim_sponsor_refund(
+        env: Env,
+        sponsor: Address,
+        tournament_id: u64,
+    ) -> Result<i128, Error> {
+        sponsor.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.state != TournamentState::Cancelled {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        let contrib_key = DataKey::SponsorContribution(tournament_id, sponsor.clone());
+        let amount: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        env.storage().persistent().set(&contrib_key, &0i128);
+
+        let token_client = token::Client::new(&env, &tournament.prize_asset);
+        token_client.transfer(&env.current_contract_address(), &sponsor, &amount);
+
+        env.events().publish(
+            (symbol_short!("tourn"), symbol_short!("spon_ref")),
+            (tournament_id, sponsor, amount),
+        );
+
+        Ok(amount)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
