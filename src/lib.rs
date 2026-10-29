@@ -2655,6 +2655,23 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Compares a provided 32-byte digest against the on-chain recorded settlement hash.
+    pub fn check_settlement_hash_match(
+        env: Env,
+        tournament_id: u64,
+        expected_hash: BytesN<32>,
+    ) -> bool {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, SettlementRecord>(&DataKey::Settlement(tournament_id))
+        {
+            record.settlement_hash == expected_hash
+        } else {
+            false
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
