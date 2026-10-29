@@ -807,3 +807,125 @@ fn test_max_string_length_rejection() {
         Err(Ok(Error::TitleTooLong))
     );
 }
+
+#[test]
+fn test_tournament_details_treasury_and_settled_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let winner = Address::generate(&env);
+    let treasury_addr = Address::generate(&env);
+
+    // Initial total settled amount should be zero
+    assert_eq!(client.get_total_settled_amount(), 0);
+
+    // Verify initial treasury fee bps is 0
+    assert_eq!(client.get_treasury_fee_bps(), 0);
+
+    // Set treasury
+    client.set_treasury(&treasury_addr, &250);
+    assert_eq!(client.get_treasury_address(), Some(treasury_addr.clone()));
+    assert_eq!(client.get_treasury_fee_bps(), 250);
+
+    // Reject treasury fee bps exceeding MAX_TREASURY_FEE_BPS (1_000)
+    assert_eq!(
+        client.try_set_treasury(&treasury_addr, &1_001),
+        Err(Ok(Error::InvalidTreasuryFeeBps))
+    );
+
+    // Duration guard: reject tournament with duration < MIN_TOURNAMENT_DURATION (60s)
+    let too_short_config = TournamentConfig {
+        tournament_id: 301,
+        title: String::from_str(&env, "Too Short Tournament"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: 10_000_000,
+        max_participants: 5,
+        start_time: 1000,
+        end_time: 1059, // 59s duration < 60s
+    };
+    assert_eq!(
+        client.try_create_tournament(&creator, &too_short_config),
+        Err(Ok(Error::TournamentDurationTooShort))
+    );
+
+    // Valid tournament
+    let prize_pool: i128 = 50_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id: u64 = 302;
+    let valid_config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Details & Settlement Test"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 8,
+        start_time: 1000,
+        end_time: 1060, // Exactly 60s
+    };
+
+    client.create_tournament(&creator, &valid_config);
+
+    // Query tournament details view
+    let details = client.get_tournament_details(&tournament_id);
+    assert_eq!(details.tournament_id, tournament_id);
+    assert_eq!(details.state, TournamentState::Funding);
+    assert_eq!(details.target_prize_amount, prize_pool);
+    assert_eq!(details.current_funded_amount, 0);
+    assert_eq!(details.current_participants, 0);
+    assert_eq!(details.max_participants, 8);
+    assert_eq!(details.start_time, 1000);
+    assert_eq!(details.end_time, 1060);
+
+    // Progress through lifecycle to settlement
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+    client.open_tournament(&creator, &tournament_id);
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(1061);
+    client.complete_tournament(&creator, &tournament_id);
+
+    let ranking_hash = BytesN::from_array(&env, &[0x55; 32]);
+    client.record_ranking_hash(&creator, &tournament_id, &1, &ranking_hash);
+
+    let agreement_hash = BytesN::from_array(&env, &[0x77; 32]);
+    client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
+    client.lock_prize_agreement(&creator, &tournament_id, &1);
+
+    let mut allocations = soroban_sdk::Vec::new(&env);
+    allocations.push_back(RecipientAllocation {
+        recipient: winner.clone(),
+        rank: 1,
+        amount: prize_pool,
+    });
+
+    let settlement_hash = BytesN::from_array(&env, &[0x88; 32]);
+    let input = SettlementInput {
+        tournament_id,
+        agreement_version: 1,
+        agreement_hash,
+        ranking_version: 1,
+        ranking_hash,
+        settlement_hash,
+        allocations,
+    };
+
+    client.authorize_settlement(&creator, &input);
+    client.execute_settlement(&creator, &tournament_id);
+
+    // Verify get_total_settled_amount updated to reflect settled prize
+    assert_eq!(client.get_total_settled_amount(), prize_pool);
+    assert_eq!(token_client.balance(&winner), prize_pool);
+}
+
