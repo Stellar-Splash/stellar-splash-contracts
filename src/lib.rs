@@ -3033,6 +3033,21 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the participant address registered at the specified index, or None.
+    pub fn get_participant_at_index(
+        env: Env,
+        tournament_id: u64,
+        index: u32,
+    ) -> Option<Address> {
+        let part_list_key = DataKey::ParticipantList(tournament_id);
+        let list: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&part_list_key)
+            .unwrap_or(Vec::new(&env));
+        list.get(index)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
