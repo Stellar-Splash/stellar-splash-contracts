@@ -287,6 +287,7 @@ enum DataKey {
     TotalEntryFees(u64),
     PlayerEntryFeePaid(u64, Address),
     PlayerStats(Address),
+    TournamentIdList,
 }
 
 #[contract]
@@ -522,6 +523,16 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::TournamentCount, &(count + 1));
+
+        let mut id_list: Vec<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::TournamentIdList)
+            .unwrap_or(Vec::new(&env));
+        id_list.push_back(config.tournament_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::TournamentIdList, &id_list);
 
         // Emit tournament_created event
         env.events().publish(
@@ -2140,6 +2151,29 @@ impl TournamentVaultContract {
                 tournaments_won: 0,
                 total_score: 0,
             })
+    }
+
+    /// Returns vector of tournament IDs that are currently active (not Completed or Cancelled).
+    pub fn get_active_tournaments(env: Env) -> Vec<u64> {
+        let id_list: Vec<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::TournamentIdList)
+            .unwrap_or(Vec::new(&env));
+
+        let mut active = Vec::new(&env);
+        for id in id_list.iter() {
+            if let Some(t) = env
+                .storage()
+                .persistent()
+                .get::<_, TournamentInfo>(&DataKey::Tournament(id))
+            {
+                if t.state != TournamentState::Completed && t.state != TournamentState::Cancelled {
+                    active.push_back(id);
+                }
+            }
+        }
+        active
     }
 }
 
