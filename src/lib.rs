@@ -261,6 +261,14 @@ pub struct DisputeWindowInfo {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TournamentCapacityInfo {
+    pub current_participants: u32,
+    pub max_participants: u32,
+    pub is_full: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EntryFeeConfig {
     pub fee_asset: Address,
     pub fee_amount: i128,
@@ -1513,6 +1521,26 @@ impl TournamentVaultContract {
         }
 
         Ok(page)
+    }
+
+    /// Returns capacity and registration status for a tournament.
+    pub fn get_tournament_capacity_status(
+        env: Env,
+        tournament_id: u64,
+    ) -> Result<TournamentCapacityInfo, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let is_full = info.current_participants >= info.max_participants;
+        Ok(TournamentCapacityInfo {
+            current_participants: info.current_participants,
+            max_participants: info.max_participants,
+            is_full,
+        })
     }
 
     // -------------------------------------------------------------
