@@ -3003,6 +3003,19 @@ impl TournamentVaultContract {
             .unwrap_or(MIN_DISPUTE_WINDOW_SECONDS)
     }
 
+    /// Returns true if the tournament current funded amount meets or exceeds the target prize amount.
+    pub fn is_tournament_funded(env: Env, tournament_id: u64) -> bool {
+        if let Some(t) = env
+            .storage()
+            .persistent()
+            .get::<_, TournamentInfo>(&DataKey::Tournament(tournament_id))
+        {
+            t.current_funded_amount >= t.target_prize_amount
+        } else {
+            false
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
