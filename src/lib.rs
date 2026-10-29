@@ -3457,6 +3457,15 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns true if the tournament was cancelled and is eligible for refunds.
+    pub fn is_tournament_cancelled(env: Env, tournament_id: u64) -> bool {
+        if let Ok(state) = Self::get_tournament_status(env, tournament_id) {
+            state == TournamentState::Cancelled
+        } else {
+            false
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
