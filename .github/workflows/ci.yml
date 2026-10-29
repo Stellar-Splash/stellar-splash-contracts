@@ -2,31 +2,38 @@ name: Stellar Splash Contracts CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test and Build Contracts
+    name: Test, Lint and Build Contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
           components: clippy, rustfmt
 
-      - name: Rustfmt Check
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Code Formatting Check
         run: cargo fmt --all -- --check
 
-      - name: Run Unit Tests
-        run: cargo test --lib --locked
+      - name: Run Test Suite
+        run: cargo test --lib --verbose
 
-      - name: Build WASM Target
-        run: cargo build --target wasm32-unknown-unknown --release --locked
+      - name: Run Clippy Linter
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build Optimized WASM Target
+        run: cargo build --target wasm32-unknown-unknown --release
