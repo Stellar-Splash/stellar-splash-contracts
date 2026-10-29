@@ -2245,6 +2245,11 @@ impl TournamentVaultContract {
             .persistent()
             .get(&DataKey::TournamentDispute(tournament_id))
     }
+
+    /// Returns the active contract/protocol version (Protocol 21).
+    pub fn get_contract_version(_env: Env) -> u32 {
+        21
+    }
 }
 
 #[cfg(test)]
