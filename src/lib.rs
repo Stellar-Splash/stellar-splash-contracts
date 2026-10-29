@@ -2925,6 +2925,37 @@ impl TournamentVaultContract {
             .unwrap_or(MIN_PRIZE_AMOUNT)
     }
 
+    /// Allows the contract admin to configure the maximum permissible participants per tournament.
+    pub fn set_max_participants_limit(
+        env: Env,
+        admin: Address,
+        new_limit: u32,
+    ) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+        if new_limit == 0 {
+            return Err(Error::InvalidMaxParticipants);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxParticipantsLimit, &new_limit);
+
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("set_maxp")),
+            new_limit,
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
