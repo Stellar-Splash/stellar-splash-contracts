@@ -1921,6 +1921,39 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Dismisses an active dispute as unsubstantiated, clearing the hold on settlement (admin only).
+    pub fn dismiss_dispute(env: Env, admin: Address, tournament_id: u64) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TournamentDisputedFlag(tournament_id), &false);
+
+        let t_dispute_key = DataKey::TournamentDispute(tournament_id);
+        if let Some(mut dispute) = env
+            .storage()
+            .persistent()
+            .get::<_, DisputeRecord>(&t_dispute_key)
+        {
+            dispute.status = DisputeStatus::Dismissed;
+            env.storage().persistent().set(&t_dispute_key, &dispute);
+        }
+
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("dismis")),
+            tournament_id,
+        );
+        Ok(())
+    }
+
     /// Verifies and returns the token balance held in this contract instance's vault.
     pub fn get_contract_token_balance(env: Env, token_address: Address) -> i128 {
         let token_client = token::Client::new(&env, &token_address);
