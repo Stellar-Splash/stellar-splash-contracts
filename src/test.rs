@@ -2274,3 +2274,35 @@ fn test_formal_invariants_solvency_and_math() {
     // Invariant 5: Win rate bps bounded between 0 and 10,000
     assert_eq!(client.get_player_win_rate_bps(&admin), 0);
 }
+
+#[test]
+fn test_contract_upgrade_and_governance_invariants() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    // Initial contract metadata invariants
+    assert_eq!(client.get_contract_version(), 21);
+    assert_eq!(client.is_paused(), false);
+    assert_eq!(client.get_proposed_admin(), None);
+
+    // Two-step governance invariant: propose, cancel, propose, accept
+    client.propose_admin_transfer(&admin, &new_admin);
+    assert_eq!(client.get_proposed_admin(), Some(new_admin.clone()));
+
+    client.cancel_admin_transfer(&admin);
+    assert_eq!(client.get_proposed_admin(), None);
+
+    client.propose_admin_transfer(&admin, &new_admin);
+    assert_eq!(client.get_proposed_admin(), Some(new_admin.clone()));
+
+    client.accept_admin_transfer(&new_admin);
+    assert_eq!(client.get_proposed_admin(), None);
+    assert_eq!(client.get_admin(), new_admin);
+}
