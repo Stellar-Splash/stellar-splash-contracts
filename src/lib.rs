@@ -2677,7 +2677,7 @@ impl TournamentVaultContract {
         if page_size == 0 {
             return 0;
         }
-        let total = Self::get_participant_count(env, tournament_id);
+        let total = Self::get_participant_count(env, tournament_id).unwrap_or(0);
         if total == 0 {
             0
         } else {

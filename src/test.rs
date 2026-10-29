@@ -1715,3 +1715,171 @@ fn test_dispute_active_capacity_and_treasury_queries() {
     client.resolve_dispute(&admin, &tournament_id);
     assert_eq!(client.is_dispute_active(&tournament_id), false);
 }
+
+#[test]
+fn test_batch1_queries_ttl_and_math() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Initial contract stats
+    let initial_stats = client.get_contract_stats();
+    assert_eq!(initial_stats.total_tournaments, 0);
+    assert_eq!(initial_stats.total_settled_amount, 0);
+    assert_eq!(initial_stats.total_volume, 0);
+    assert_eq!(initial_stats.is_paused, false);
+
+    // Pure math helpers
+    assert_eq!(client.calculate_payout_share(&10_000_000, &5000), 5_000_000);
+    assert_eq!(client.calculate_payout_share(&10_000_000, &3000), 3_000_000);
+    assert_eq!(client.calculate_payout_share(&10_000_000, &0), 0);
+
+    let mut valid_bps = Vec::new(&env);
+    valid_bps.push_back(5000);
+    valid_bps.push_back(3000);
+    valid_bps.push_back(2000);
+    assert_eq!(client.validate_basis_points_sum(&valid_bps), true);
+
+    let mut invalid_bps = Vec::new(&env);
+    invalid_bps.push_back(5000);
+    invalid_bps.push_back(4000);
+    assert_eq!(client.validate_basis_points_sum(&invalid_bps), false);
+
+    // Create tournament
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let player1 = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let tournament_id: u64 = 201;
+    let prize_amount: i128 = 20_000_000;
+    token_asset.mint(&funder, &prize_amount);
+
+    env.ledger().set_timestamp(1000);
+
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Batch 1 Championship"),
+        game_id: String::from_str(&env, "splash-rush-b1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 5,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    assert_eq!(client.get_tournament_creator(&tournament_id), creator);
+    assert_eq!(client.is_tournament_expired(&tournament_id), false);
+    assert_eq!(client.get_tournament_time_remaining(&tournament_id), 1000);
+
+    // Fund tournament
+    client.fund_prize_pool(&funder, &tournament_id, &prize_amount);
+    assert_eq!(
+        client.get_tournament_funder_opt(&tournament_id),
+        Some(funder.clone())
+    );
+
+    // Open tournament
+    client.open_tournament(&creator, &tournament_id);
+
+    // Participant checks before & after registration
+    assert_eq!(
+        client.is_player_registered(&tournament_id, &player1),
+        false
+    );
+    client.register_participant(&player1, &tournament_id);
+    assert_eq!(client.is_player_registered(&tournament_id, &player1), true);
+
+    // Storage TTL extension for participant
+    assert_eq!(
+        client.extend_participant_storage_ttl(&tournament_id, &player1),
+        ()
+    );
+
+    // Participant pagination calculation
+    assert_eq!(
+        client.get_participants_page_count(&tournament_id, &2),
+        1
+    );
+
+    // Tournament summaries query
+    let summaries = client.get_tournament_summaries(&0, &10);
+    assert_eq!(summaries.len(), 1);
+    let s0 = summaries.get(0).unwrap();
+    assert_eq!(s0.tournament_id, tournament_id);
+    assert_eq!(s0.state, TournamentState::Open);
+    assert_eq!(s0.current_participants, 1);
+
+    // Disputed tournaments query (empty initially)
+    assert_eq!(client.get_disputed_tournaments().len(), 0);
+
+    // Fast-forward past end time
+    env.ledger().set_timestamp(2001);
+    assert_eq!(client.is_tournament_expired(&tournament_id), true);
+    assert_eq!(client.get_tournament_time_remaining(&tournament_id), 0);
+
+    // Complete tournament
+    client.start_tournament(&creator, &tournament_id);
+    client.complete_tournament(&creator, &tournament_id);
+
+    // Register agreement & test agreement timestamp & TTL
+    let agreement_hash = BytesN::from_array(&env, &[7u8; 32]);
+    client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
+    client.lock_prize_agreement(&creator, &tournament_id, &1);
+    assert!(client.get_prize_agreement_timestamp(&tournament_id, &1).is_some());
+    assert_eq!(client.extend_agreement_storage_ttl(&tournament_id, &1), ());
+
+    // Record ranking & test ranking timestamp
+    let ranking_hash = BytesN::from_array(&env, &[9u8; 32]);
+    client.record_ranking_hash(&creator, &tournament_id, &1, &ranking_hash);
+    assert!(client.get_ranking_timestamp(&tournament_id).is_some());
+
+    // Authorize & Execute settlement
+    let mut allocations = Vec::new(&env);
+    allocations.push_back(RecipientAllocation {
+        recipient: player1.clone(),
+        rank: 1,
+        amount: prize_amount,
+    });
+    let settlement_hash = BytesN::from_array(&env, &[42u8; 32]);
+    client.authorize_settlement(
+        &creator,
+        &SettlementInput {
+            tournament_id,
+            agreement_version: 1,
+            agreement_hash,
+            ranking_version: 1,
+            ranking_hash,
+            settlement_hash: settlement_hash.clone(),
+            allocations,
+        },
+    );
+    client.execute_settlement(&creator, &tournament_id);
+
+    // Verify settlement timestamp & settlement hash match
+    assert!(client.get_settlement_timestamp(&tournament_id).is_some());
+    assert_eq!(
+        client.check_settlement_hash_match(&tournament_id, &settlement_hash),
+        true
+    );
+    let false_hash = BytesN::from_array(&env, &[99u8; 32]);
+    assert_eq!(
+        client.check_settlement_hash_match(&tournament_id, &false_hash),
+        false
+    );
+
+    // Storage TTL extension for settlement
+    assert_eq!(client.extend_settlement_storage_ttl(&tournament_id), ());
+
+    // Player win rate query
+    client.increment_player_wins(&admin, &player1);
+    let win_rate = client.get_player_win_rate_bps(&player1);
+    assert_eq!(win_rate, 10_000); // 1 win / 1 joined = 10,000 bps (100.00%)
+}
