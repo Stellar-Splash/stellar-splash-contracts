@@ -47,6 +47,9 @@ pub enum Error {
     InvalidMaxParticipants = 36,
     AssetNotWhitelisted = 37,
     DisputeWindowNotElapsed = 38,
+    DisputeAlreadySubmitted = 39,
+    TournamentDisputed = 40,
+    DisputeWindowElapsed = 41,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
@@ -230,6 +233,15 @@ pub struct SettlementRecord {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeRecord {
+    pub tournament_id: u64,
+    pub challenger: Address,
+    pub reason_code: u32,
+    pub submitted_at: u64,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -252,6 +264,8 @@ enum DataKey {
     TournamentMetadataUri(u64),
     WhitelistedAsset(Address),
     DisputeWindow(u64),
+    DisputeRecord(u64, Address),
+    TournamentDisputedFlag(u64),
 }
 
 #[contract]
@@ -272,9 +286,7 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::TotalSettledAmount, &0i128);
-        env.storage()
-            .instance()
-            .set(&DataKey::TotalVolume, &0i128);
+        env.storage().instance().set(&DataKey::TotalVolume, &0i128);
         env.storage()
             .instance()
             .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
@@ -572,9 +584,15 @@ impl TournamentVaultContract {
 
         env.storage().persistent().set(&key, &tournament);
 
-        let cur_vol: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+        let cur_vol: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalVolume)
+            .unwrap_or(0);
         if let Some(new_vol) = cur_vol.checked_add(deposit_amount) {
-            env.storage().instance().set(&DataKey::TotalVolume, &new_vol);
+            env.storage()
+                .instance()
+                .set(&DataKey::TotalVolume, &new_vol);
         }
 
         env.events().publish(
@@ -664,9 +682,15 @@ impl TournamentVaultContract {
 
         env.storage().persistent().set(&key, &tournament);
 
-        let cur_vol: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+        let cur_vol: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalVolume)
+            .unwrap_or(0);
         if let Some(new_vol) = cur_vol.checked_add(deposit_amount) {
-            env.storage().instance().set(&DataKey::TotalVolume, &new_vol);
+            env.storage()
+                .instance()
+                .set(&DataKey::TotalVolume, &new_vol);
         }
 
         env.events().publish(
@@ -1559,6 +1583,13 @@ impl TournamentVaultContract {
             }
         }
 
+        if Self::is_tournament_disputed(env.clone(), tournament_id) {
+            let admin = Self::get_admin(env.clone())?;
+            if admin != caller {
+                return Err(Error::TournamentDisputed);
+            }
+        }
+
         let settle_key = DataKey::Settlement(tournament_id);
         let mut record: SettlementRecord = env
             .storage()
@@ -1722,6 +1753,88 @@ impl TournamentVaultContract {
             Some(end_ts) => env.ledger().timestamp() >= end_ts,
             None => true,
         }
+    }
+
+    /// Submits a formal on-chain dispute challenge during an active dispute window.
+    pub fn submit_dispute(
+        env: Env,
+        challenger: Address,
+        tournament_id: u64,
+        reason_code: u32,
+    ) -> Result<DisputeRecord, Error> {
+        challenger.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        if !env.storage().persistent().has(&tourn_key) {
+            return Err(Error::TournamentNotFound);
+        }
+
+        // Verify dispute window is configured and has not elapsed
+        if Self::get_dispute_window_end(env.clone(), tournament_id).is_none()
+            || Self::is_dispute_window_elapsed(env.clone(), tournament_id)
+        {
+            return Err(Error::DisputeWindowElapsed);
+        }
+
+        let dispute_key = DataKey::DisputeRecord(tournament_id, challenger.clone());
+        if env.storage().persistent().has(&dispute_key) {
+            return Err(Error::DisputeAlreadySubmitted);
+        }
+
+        let record = DisputeRecord {
+            tournament_id,
+            challenger: challenger.clone(),
+            reason_code,
+            submitted_at: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&dispute_key, &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TournamentDisputedFlag(tournament_id), &true);
+        env.storage().persistent().extend_ttl(
+            &dispute_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
+
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("filed")),
+            (tournament_id, challenger, reason_code),
+        );
+
+        Ok(record)
+    }
+
+    /// Checks if a tournament is currently marked as disputed.
+    pub fn is_tournament_disputed(env: Env, tournament_id: u64) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TournamentDisputedFlag(tournament_id))
+            .unwrap_or(false)
+    }
+
+    /// Resolves an active dispute, clearing the hold on settlement (admin only).
+    pub fn resolve_dispute(env: Env, admin: Address, tournament_id: u64) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TournamentDisputedFlag(tournament_id), &false);
+
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("reslvd")),
+            tournament_id,
+        );
+        Ok(())
     }
 
     /// Upgrades the contract's executable WASM bytecode (admin only).
