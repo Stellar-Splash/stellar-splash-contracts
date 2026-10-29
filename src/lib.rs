@@ -2536,6 +2536,23 @@ impl TournamentVaultContract {
         total == 10_000
     }
 
+    /// Returns vector of tournament IDs that currently have an unresolved active dispute.
+    pub fn get_disputed_tournaments(env: Env) -> Vec<u64> {
+        let id_list: Vec<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::TournamentIdList)
+            .unwrap_or(Vec::new(&env));
+
+        let mut disputed = Vec::new(&env);
+        for id in id_list.iter() {
+            if Self::is_dispute_active(env.clone(), id) {
+                disputed.push_back(id);
+            }
+        }
+        disputed
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
