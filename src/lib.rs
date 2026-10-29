@@ -3409,6 +3409,17 @@ impl TournamentVaultContract {
         env.storage().persistent().get(&roy_key).unwrap_or(0)
     }
 
+    /// Calculates the token amount corresponding to the configured creator royalty for a tournament.
+    pub fn calculate_creator_royalty(env: Env, tournament_id: u64) -> i128 {
+        let bps = Self::get_creator_royalty_bps(env.clone(), tournament_id);
+        if bps == 0 {
+            0
+        } else {
+            let balance = Self::get_vault_balance(env, tournament_id);
+            (balance * (bps as i128)) / 10_000
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
