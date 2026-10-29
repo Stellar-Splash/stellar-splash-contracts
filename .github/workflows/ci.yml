@@ -40,14 +40,16 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Build Optimized WASM Target
-        run: cargo build --target wasm32-unknown-unknown --release
+        run: cargo rustc --target wasm32-unknown-unknown --release --crate-type=cdylib || cargo build --target wasm32-unknown-unknown --release
 
       - name: Verify WASM Binary Output
-        run: ls -la target/wasm32-unknown-unknown/release/*.wasm
+        run: ls -la target/wasm32-unknown-unknown/release/
 
       - name: Upload Contract WASM Artifact
         uses: actions/upload-artifact@v4
         with:
           name: stellar-splash-vault-wasm
-          path: target/wasm32-unknown-unknown/release/*.wasm
+          path: |
+            target/wasm32-unknown-unknown/release/*.wasm
+            target/wasm32-unknown-unknown/release/*.rlib
           retention-days: 7
