@@ -1813,6 +1813,47 @@ impl TournamentVaultContract {
         Ok(end_timestamp)
     }
 
+    /// Extends an active or configured dispute window (admin only).
+    pub fn extend_dispute_window(
+        env: Env,
+        admin: Address,
+        tournament_id: u64,
+        extension_seconds: u64,
+    ) -> Result<u64, Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let key = DataKey::DisputeWindow(tournament_id);
+        let current_end: u64 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let new_end = current_end
+            .checked_add(extension_seconds)
+            .ok_or(Error::ArithmeticOverflow)?;
+
+        env.storage().persistent().set(&key, &new_end);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("extend")),
+            (tournament_id, new_end),
+        );
+
+        Ok(new_end)
+    }
+
     /// Retrieves the dispute window end timestamp if configured.
     pub fn get_dispute_window_end(env: Env, tournament_id: u64) -> Option<u64> {
         env.storage()
