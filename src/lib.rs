@@ -3016,6 +3016,23 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the funding deficit in stroops required to fully cover the target prize pool, or 0 if funded.
+    pub fn get_funding_deficit(env: Env, tournament_id: u64) -> i128 {
+        if let Some(t) = env
+            .storage()
+            .persistent()
+            .get::<_, TournamentInfo>(&DataKey::Tournament(tournament_id))
+        {
+            if t.current_funded_amount < t.target_prize_amount {
+                t.target_prize_amount - t.current_funded_amount
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
