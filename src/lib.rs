@@ -2503,6 +2503,12 @@ impl TournamentVaultContract {
         summaries
     }
 
+    /// Returns true if the player address is registered for the specified tournament.
+    pub fn is_player_registered(env: Env, tournament_id: u64, player: Address) -> bool {
+        let part_key = DataKey::Participant(tournament_id, player);
+        env.storage().persistent().has(&part_key)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
