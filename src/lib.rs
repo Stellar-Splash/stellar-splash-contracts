@@ -3448,6 +3448,15 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns true if the tournament has concluded and reached the Completed state.
+    pub fn is_tournament_completed(env: Env, tournament_id: u64) -> bool {
+        if let Ok(state) = Self::get_tournament_status(env, tournament_id) {
+            state == TournamentState::Completed
+        } else {
+            false
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
