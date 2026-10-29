@@ -2821,6 +2821,17 @@ impl TournamentVaultContract {
         Ok(tournament.current_funded_amount)
     }
 
+    /// Returns the number of unique sponsors who contributed to the tournament prize pool.
+    pub fn get_tournament_sponsors_count(env: Env, tournament_id: u64) -> u32 {
+        let sponsors_key = DataKey::TournamentSponsors(tournament_id);
+        let sponsors: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&sponsors_key)
+            .unwrap_or(Vec::new(&env));
+        sponsors.len()
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
