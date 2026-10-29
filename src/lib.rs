@@ -3329,6 +3329,40 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Allows the tournament creator to configure the visual banner image URI.
+    pub fn set_tournament_banner_uri(
+        env: Env,
+        creator: Address,
+        tournament_id: u64,
+        banner_uri: String,
+    ) -> Result<(), Error> {
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != creator {
+            return Err(Error::Unauthorized);
+        }
+        creator.require_auth();
+
+        if banner_uri.len() > MAX_STRING_LENGTH {
+            return Err(Error::TitleTooLong);
+        }
+
+        let uri_key = DataKey::TournamentBannerUri(tournament_id);
+        env.storage().persistent().set(&uri_key, &banner_uri);
+
+        env.events().publish(
+            (symbol_short!("tourn"), symbol_short!("banner")),
+            (tournament_id, banner_uri),
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
