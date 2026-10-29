@@ -2775,6 +2775,13 @@ impl TournamentVaultContract {
             .current_funded_amount
             .checked_add(amount)
             .ok_or(Error::ArithmeticOverflow)?;
+
+        if tournament.current_funded_amount >= tournament.target_prize_amount
+            && tournament.state == TournamentState::Funding
+        {
+            tournament.state = TournamentState::Funded;
+        }
+
         env.storage().persistent().set(&tourn_key, &tournament);
 
         let contrib_key = DataKey::SponsorContribution(tournament_id, sponsor.clone());
@@ -2996,7 +3003,7 @@ impl TournamentVaultContract {
     }
 
     /// Returns the active default dispute window duration in seconds.
-    pub fn get_default_dispute_window_duration(env: Env) -> u64 {
+    pub fn get_default_dispute_window(env: Env) -> u64 {
         env.storage()
             .instance()
             .get(&DataKey::DefaultDisputeWindow)

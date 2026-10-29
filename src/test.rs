@@ -1883,3 +1883,212 @@ fn test_batch1_queries_ttl_and_math() {
     let win_rate = client.get_player_win_rate_bps(&player1);
     assert_eq!(win_rate, 10_000); // 1 win / 1 joined = 10,000 bps (100.00%)
 }
+
+#[test]
+fn test_batch2_sponsorship_admin_and_payout_queries() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // 1. Admin configurations & queries
+    assert_eq!(client.get_min_prize_amount(), MIN_PRIZE_AMOUNT);
+    client.set_min_prize_amount(&admin, &15_000_000);
+    assert_eq!(client.get_min_prize_amount(), 15_000_000);
+
+    assert_eq!(client.get_max_participants_limit(), MAX_PARTICIPANTS_LIMIT);
+    client.set_max_participants_limit(&admin, &500);
+    assert_eq!(client.get_max_participants_limit(), 500);
+
+    assert_eq!(
+        client.get_default_dispute_window(),
+        MIN_DISPUTE_WINDOW_SECONDS
+    );
+    client.set_dispute_window_duration(&admin, &600);
+    assert_eq!(client.get_default_dispute_window(), 600);
+
+    // 2. Setup tokens & actors
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let sponsor1 = Address::generate(&env);
+    let sponsor2 = Address::generate(&env);
+    let player1 = Address::generate(&env);
+    let player2 = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let tournament_id: u64 = 301;
+    let target_prize: i128 = 20_000_000;
+    token_asset.mint(&funder, &15_000_000);
+    token_asset.mint(&sponsor1, &10_000_000);
+    token_asset.mint(&sponsor2, &5_000_000);
+
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Batch 2 Sponsored Clash"),
+        game_id: String::from_str(&env, "splash-rush-b2"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: target_prize,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+
+    // Title and Game ID queries
+    assert_eq!(
+        client.get_tournament_title(&tournament_id),
+        String::from_str(&env, "Batch 2 Sponsored Clash")
+    );
+    assert_eq!(
+        client.get_tournament_game_id(&tournament_id),
+        String::from_str(&env, "splash-rush-b2")
+    );
+
+    // Funding deficit check before funding
+    assert_eq!(client.is_tournament_funded(&tournament_id), false);
+    assert_eq!(client.get_funding_deficit(&tournament_id), target_prize);
+
+    // Fund partial amount (15M of 20M)
+    client.fund_prize_pool(&funder, &tournament_id, &15_000_000);
+    assert_eq!(client.is_tournament_funded(&tournament_id), false);
+    assert_eq!(client.get_funding_deficit(&tournament_id), 5_000_000);
+
+    // Community sponsorship from sponsor1 (5M) -> reaches target!
+    client.sponsor_tournament(&sponsor1, &tournament_id, &5_000_000);
+    assert_eq!(client.is_tournament_funded(&tournament_id), true);
+    assert_eq!(client.get_funding_deficit(&tournament_id), 0);
+
+    // Additional sponsorship from sponsor2 (2M) -> bonus pool!
+    client.sponsor_tournament(&sponsor2, &tournament_id, &2_000_000);
+
+    // Check sponsorship queries
+    assert_eq!(client.get_tournament_sponsors_count(&tournament_id), 2);
+    assert_eq!(
+        client.get_sponsor_contribution(&tournament_id, &sponsor1),
+        5_000_000
+    );
+    assert_eq!(
+        client.get_sponsor_contribution(&tournament_id, &sponsor2),
+        2_000_000
+    );
+    assert_eq!(
+        client.get_total_sponsored_amount(&tournament_id),
+        7_000_000
+    );
+
+    // Open & register players
+    client.open_tournament(&creator, &tournament_id);
+    client.register_participant(&player1, &tournament_id);
+    client.register_participant(&player2, &tournament_id);
+
+    // Check participant at index
+    assert_eq!(
+        client.get_participant_at_index(&tournament_id, &0),
+        Some(player1.clone())
+    );
+    assert_eq!(
+        client.get_participant_at_index(&tournament_id, &1),
+        Some(player2.clone())
+    );
+    assert_eq!(
+        client.get_participant_at_index(&tournament_id, &99),
+        None
+    );
+
+    // Complete tournament and settle
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(2001);
+    client.complete_tournament(&creator, &tournament_id);
+
+    let agreement_hash = BytesN::from_array(&env, &[11u8; 32]);
+    client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
+    client.lock_prize_agreement(&creator, &tournament_id, &1);
+
+    let ranking_hash = BytesN::from_array(&env, &[22u8; 32]);
+    client.record_ranking_hash(&creator, &tournament_id, &1, &ranking_hash);
+
+    let _total_pool = 15_000_000 + 7_000_000;
+    let mut allocations = Vec::new(&env);
+    allocations.push_back(RecipientAllocation {
+        recipient: player1.clone(),
+        rank: 1,
+        amount: 15_000_000,
+    });
+    allocations.push_back(RecipientAllocation {
+        recipient: player2.clone(),
+        rank: 2,
+        amount: 7_000_000,
+    });
+    let settlement_hash = BytesN::from_array(&env, &[33u8; 32]);
+    client.authorize_settlement(
+        &creator,
+        &SettlementInput {
+            tournament_id,
+            agreement_version: 1,
+            agreement_hash,
+            ranking_version: 1,
+            ranking_hash,
+            settlement_hash,
+            allocations,
+        },
+    );
+    client.execute_settlement(&creator, &tournament_id);
+
+    // Verify player settlement queries
+    assert_eq!(
+        client.check_player_is_winner(&tournament_id, &player1),
+        true
+    );
+    assert_eq!(
+        client.check_player_is_winner(&tournament_id, &player2),
+        true
+    );
+    assert_eq!(
+        client.check_player_is_winner(&tournament_id, &funder),
+        false
+    );
+
+    assert_eq!(
+        client.get_player_payout_amount(&tournament_id, &player1),
+        15_000_000
+    );
+    assert_eq!(
+        client.get_player_payout_amount(&tournament_id, &player2),
+        7_000_000
+    );
+    assert_eq!(
+        client.get_player_payout_amount(&tournament_id, &funder),
+        0
+    );
+
+    assert_eq!(client.get_player_rank(&tournament_id, &player1), 1);
+    assert_eq!(client.get_player_rank(&tournament_id, &player2), 2);
+    assert_eq!(client.get_player_rank(&tournament_id, &funder), 0);
+
+    // Test sponsor refund on cancelled tournament
+    let cancelled_tourn_id: u64 = 302;
+    let cancel_config = TournamentConfig {
+        tournament_id: cancelled_tourn_id,
+        title: String::from_str(&env, "Cancelled Clash"),
+        game_id: String::from_str(&env, "splash-rush-b2"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: target_prize,
+        max_participants: 10,
+        start_time: 3000,
+        end_time: 4000,
+    };
+    client.create_tournament(&creator, &cancel_config);
+    token_asset.mint(&sponsor1, &3_000_000);
+    client.sponsor_tournament(&sponsor1, &cancelled_tourn_id, &3_000_000);
+    client.cancel_tournament(&creator, &cancelled_tourn_id);
+
+    let refunded = client.claim_sponsor_refund(&sponsor1, &cancelled_tourn_id);
+    assert_eq!(refunded, 3_000_000);
+}
