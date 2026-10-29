@@ -2672,6 +2672,19 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the total page count for paginating through tournament participants.
+    pub fn get_participants_page_count(env: Env, tournament_id: u64, page_size: u32) -> u32 {
+        if page_size == 0 {
+            return 0;
+        }
+        let total = Self::get_participant_count(env, tournament_id);
+        if total == 0 {
+            0
+        } else {
+            (total + page_size - 1) / page_size
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
