@@ -2964,6 +2964,37 @@ impl TournamentVaultContract {
             .unwrap_or(MAX_PARTICIPANTS_LIMIT)
     }
 
+    /// Allows the contract admin to configure the default dispute window duration in seconds.
+    pub fn set_dispute_window_duration(
+        env: Env,
+        admin: Address,
+        new_duration: u64,
+    ) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+        if new_duration < MIN_DISPUTE_WINDOW_SECONDS {
+            return Err(Error::DisputeWindowNotElapsed);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DefaultDisputeWindow, &new_duration);
+
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("set_disp")),
+            new_duration,
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
