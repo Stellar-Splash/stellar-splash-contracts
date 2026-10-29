@@ -2701,6 +2701,22 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Extends the persistent storage TTL for a specific prize agreement version.
+    pub fn extend_agreement_storage_ttl(
+        env: Env,
+        tournament_id: u64,
+        version: u32,
+    ) -> Result<(), Error> {
+        let agr_key = DataKey::PrizeAgreement(tournament_id, version);
+        if !env.storage().persistent().has(&agr_key) {
+            return Err(Error::AgreementNotFound);
+        }
+        env.storage()
+            .persistent()
+            .extend_ttl(&agr_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
