@@ -40,3 +40,4 @@ Studios can earn up to 15% ($1,500\text{ bps}$) of every tournament pool:
 client.set_creator_royalty_bps(&admin, &tournament_id, &1000); // 10.0%
 ```
 Upon tournament settlement, the creator royalty is atomically deposited into the studio's treasury wallet.
+

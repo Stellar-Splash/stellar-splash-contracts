@@ -56,3 +56,4 @@ All financial calculations operate on 64-bit unsigned fixed-point integers using
 - Protocol Fee: Fixed at $250\text{ bps}$ ($2.5\%$).
 - Net Prize Distribution: Exactly $10,000 - (\text{Royalty} + \text{Protocol Fee})$ basis points allocated across ranked positions.
 - Invariant: $\sum_{i} \text{Payout}_i + \text{Royalty} + \text{Fee} \equiv \text{TotalPool}$. No tokens can ever be trapped or minted.
+

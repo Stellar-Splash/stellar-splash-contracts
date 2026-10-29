@@ -19,3 +19,4 @@ When interacting with the `TournamentVaultContract` (`CACHWJEZY6JN36VFACWRQ7FP4T
 | `9` | `InvalidAmount` | Entry fee deposit or payout amount is zero/negative. | Provide positive 64-bit integer amount. |
 | `10` | `BasisPointsOverflow`| Total payout basis points does not equal 10,000. | Reconcile prize split to sum exactly to 10,000 bps. |
 | `11` | `SettlementWindowExpired` | Payout attempted past authorized settlement window. | Submit dispute arbitration or trigger refund. |
+

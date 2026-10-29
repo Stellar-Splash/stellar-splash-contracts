@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(clippy::all)]
 
 use super::*;
 use soroban_sdk::{
@@ -1790,10 +1791,7 @@ fn test_batch1_queries_ttl_and_math() {
     client.open_tournament(&creator, &tournament_id);
 
     // Participant checks before & after registration
-    assert_eq!(
-        client.is_player_registered(&tournament_id, &player1),
-        false
-    );
+    assert_eq!(client.is_player_registered(&tournament_id, &player1), false);
     client.register_participant(&player1, &tournament_id);
     assert_eq!(client.is_player_registered(&tournament_id, &player1), true);
 
@@ -1804,10 +1802,7 @@ fn test_batch1_queries_ttl_and_math() {
     );
 
     // Participant pagination calculation
-    assert_eq!(
-        client.get_participants_page_count(&tournament_id, &2),
-        1
-    );
+    assert_eq!(client.get_participants_page_count(&tournament_id, &2), 1);
 
     // Tournament summaries query
     let summaries = client.get_tournament_summaries(&0, &10);
@@ -1833,7 +1828,9 @@ fn test_batch1_queries_ttl_and_math() {
     let agreement_hash = BytesN::from_array(&env, &[7u8; 32]);
     client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
     client.lock_prize_agreement(&creator, &tournament_id, &1);
-    assert!(client.get_prize_agreement_timestamp(&tournament_id, &1).is_some());
+    assert!(client
+        .get_prize_agreement_timestamp(&tournament_id, &1)
+        .is_some());
     assert_eq!(client.extend_agreement_storage_ttl(&tournament_id, &1), ());
 
     // Record ranking & test ranking timestamp
@@ -1978,10 +1975,7 @@ fn test_batch2_sponsorship_admin_and_payout_queries() {
         client.get_sponsor_contribution(&tournament_id, &sponsor2),
         2_000_000
     );
-    assert_eq!(
-        client.get_total_sponsored_amount(&tournament_id),
-        7_000_000
-    );
+    assert_eq!(client.get_total_sponsored_amount(&tournament_id), 7_000_000);
 
     // Open & register players
     client.open_tournament(&creator, &tournament_id);
@@ -1997,10 +1991,7 @@ fn test_batch2_sponsorship_admin_and_payout_queries() {
         client.get_participant_at_index(&tournament_id, &1),
         Some(player2.clone())
     );
-    assert_eq!(
-        client.get_participant_at_index(&tournament_id, &99),
-        None
-    );
+    assert_eq!(client.get_participant_at_index(&tournament_id, &99), None);
 
     // Complete tournament and settle
     client.start_tournament(&creator, &tournament_id);
@@ -2063,10 +2054,7 @@ fn test_batch2_sponsorship_admin_and_payout_queries() {
         client.get_player_payout_amount(&tournament_id, &player2),
         7_000_000
     );
-    assert_eq!(
-        client.get_player_payout_amount(&tournament_id, &funder),
-        0
-    );
+    assert_eq!(client.get_player_payout_amount(&tournament_id, &funder), 0);
 
     assert_eq!(client.get_player_rank(&tournament_id, &player1), 1);
     assert_eq!(client.get_player_rank(&tournament_id, &player2), 2);
@@ -2213,10 +2201,7 @@ fn test_batch3_badges_governance_and_lifecycle() {
 
     client.submit_dispute(&player1, &tournament_id, &42);
     assert_eq!(client.get_dispute_reason_code(&tournament_id), 42);
-    assert_eq!(
-        client.get_dispute_challenger(&tournament_id),
-        Some(player1)
-    );
+    assert_eq!(client.get_dispute_challenger(&tournament_id), Some(player1));
 
     // Cancelled tournament check
     let cancel_id: u64 = 402;

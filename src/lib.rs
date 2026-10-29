@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::all)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
@@ -2495,11 +2496,7 @@ impl TournamentVaultContract {
     }
 
     /// Returns paginated slice of tournament summaries for high-throughput indexers and frontend discovery.
-    pub fn get_tournament_summaries(
-        env: Env,
-        offset: u32,
-        limit: u32,
-    ) -> Vec<TournamentSummary> {
+    pub fn get_tournament_summaries(env: Env, offset: u32, limit: u32) -> Vec<TournamentSummary> {
         let id_list: Vec<u64> = env
             .storage()
             .instance()
@@ -2598,11 +2595,7 @@ impl TournamentVaultContract {
             .get::<_, TournamentInfo>(&DataKey::Tournament(tournament_id))
         {
             let now = env.ledger().timestamp();
-            if now < t.end_time {
-                t.end_time - now
-            } else {
-                0
-            }
+            t.end_time.saturating_sub(now)
         } else {
             0
         }
@@ -2718,7 +2711,7 @@ impl TournamentVaultContract {
         if total == 0 {
             0
         } else {
-            (total + page_size - 1) / page_size
+            total.div_ceil(page_size)
         }
     }
 
@@ -2732,9 +2725,11 @@ impl TournamentVaultContract {
         if !env.storage().persistent().has(&part_key) {
             return Err(Error::Unauthorized);
         }
-        env.storage()
-            .persistent()
-            .extend_ttl(&part_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        env.storage().persistent().extend_ttl(
+            &part_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
         Ok(())
     }
 
@@ -2748,24 +2743,25 @@ impl TournamentVaultContract {
         if !env.storage().persistent().has(&agr_key) {
             return Err(Error::AgreementNotFound);
         }
-        env.storage()
-            .persistent()
-            .extend_ttl(&agr_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        env.storage().persistent().extend_ttl(
+            &agr_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
         Ok(())
     }
 
     /// Extends the persistent storage TTL for a finalized settlement record.
-    pub fn extend_settlement_storage_ttl(
-        env: Env,
-        tournament_id: u64,
-    ) -> Result<(), Error> {
+    pub fn extend_settlement_storage_ttl(env: Env, tournament_id: u64) -> Result<(), Error> {
         let set_key = DataKey::Settlement(tournament_id);
         if !env.storage().persistent().has(&set_key) {
             return Err(Error::SettlementNotFound);
         }
-        env.storage()
-            .persistent()
-            .extend_ttl(&set_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        env.storage().persistent().extend_ttl(
+            &set_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
         Ok(())
     }
 
@@ -2843,11 +2839,15 @@ impl TournamentVaultContract {
         let new_total_spon = prev_total_spon
             .checked_add(amount)
             .ok_or(Error::ArithmeticOverflow)?;
-        env.storage().persistent().set(&tot_spon_key, &new_total_spon);
-
         env.storage()
             .persistent()
-            .extend_ttl(&tourn_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+            .set(&tot_spon_key, &new_total_spon);
+
+        env.storage().persistent().extend_ttl(
+            &tourn_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
 
         env.events().publish(
             (symbol_short!("tourn"), symbol_short!("sponsor")),
@@ -2869,11 +2869,7 @@ impl TournamentVaultContract {
     }
 
     /// Returns the total amount contributed by a specific sponsor for a tournament.
-    pub fn get_sponsor_contribution(
-        env: Env,
-        tournament_id: u64,
-        sponsor: Address,
-    ) -> i128 {
+    pub fn get_sponsor_contribution(env: Env, tournament_id: u64, sponsor: Address) -> i128 {
         let contrib_key = DataKey::SponsorContribution(tournament_id, sponsor);
         env.storage().persistent().get(&contrib_key).unwrap_or(0)
     }
@@ -3070,11 +3066,7 @@ impl TournamentVaultContract {
     }
 
     /// Returns the participant address registered at the specified index, or None.
-    pub fn get_participant_at_index(
-        env: Env,
-        tournament_id: u64,
-        index: u32,
-    ) -> Option<Address> {
+    pub fn get_participant_at_index(env: Env, tournament_id: u64, index: u32) -> Option<Address> {
         let part_list_key = DataKey::ParticipantList(tournament_id);
         let list: Vec<Address> = env
             .storage()
@@ -3275,10 +3267,7 @@ impl TournamentVaultContract {
     }
 
     /// Step 2 of two-step administrative transfer: proposed admin accepts ownership.
-    pub fn accept_admin_transfer(
-        env: Env,
-        proposed_admin: Address,
-    ) -> Result<(), Error> {
+    pub fn accept_admin_transfer(env: Env, proposed_admin: Address) -> Result<(), Error> {
         let stored_proposed: Address = env
             .storage()
             .instance()
@@ -3321,10 +3310,8 @@ impl TournamentVaultContract {
 
         env.storage().instance().remove(&DataKey::ProposedAdmin);
 
-        env.events().publish(
-            (symbol_short!("admin"), symbol_short!("cancel_t")),
-            admin,
-        );
+        env.events()
+            .publish((symbol_short!("admin"), symbol_short!("cancel_t")), admin);
 
         Ok(())
     }

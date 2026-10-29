@@ -22,3 +22,4 @@ Based on Protocol 21 Soroban testnet fee matrices:
 1. **Compact Enum Serialization**: Tournament status is stored as a 1-byte integer enum rather than strings or complex structs.
 2. **Key Compacting**: Composite keys (e.g. `(Symbol::new(&env, "Entry"), tournament_id, player_address)`) ensure $O(1)$ lookups without iterating tables.
 3. **Lazy Bumping**: Persistent entries are only bumped during active writes, avoiding unnecessary ledger updates during read-only status checks.
+

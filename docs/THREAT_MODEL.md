@@ -24,3 +24,4 @@ Stellar Splash secures monetary tournament pools and leaderboard settlements on 
   - `is_paused()` immediately freezes deposits and settlements.
   - Emergency refunds (`claim_refund`) remain active during pause if a tournament has timed out without settlement ($T > T_{\text{end}} + 86,400\text{s}$).
   - Admin cannot seize escrowed player funds directly; only programmatic refunds to original depositors are authorized.
+

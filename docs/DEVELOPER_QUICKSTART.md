@@ -44,3 +44,4 @@ stellar contract optimize --wasm target/wasm32-unknown-unknown/release/stellar_s
 bash scripts/profile-wasm-size.sh
 ```
 Ensures WASM bytecode stays well within the Soroban network limit ($< 64\text{ KB}$).
+

@@ -56,3 +56,4 @@ If unexpected invariant violations occur post-upgrade:
 2. Inspect pending tournament states.
 3. If necessary, execute code rollback to previous verified WASM hash via authorized hotfix key.
 4. Programmatically process tournament refunds for active matches.
+

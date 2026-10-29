@@ -5,7 +5,13 @@ echo "=========================================="
 echo "Soroban WASM Binary Size Profiler"
 echo "=========================================="
 
-WASM_FILE="target/wasm32-unknown-unknown/release/stellar_splash.wasm"
+if [ -f "target/wasm32-unknown-unknown/release/stellar_splash_contracts.wasm" ]; then
+  WASM_FILE="target/wasm32-unknown-unknown/release/stellar_splash_contracts.wasm"
+elif [ -f "target/wasm32-unknown-unknown/release/stellar_splash.wasm" ]; then
+  WASM_FILE="target/wasm32-unknown-unknown/release/stellar_splash.wasm"
+else
+  WASM_FILE="target/wasm32-unknown-unknown/release/stellar_splash_contracts.wasm"
+fi
 
 if [ ! -f "$WASM_FILE" ]; then
   echo "Building optimized WASM target..."
@@ -13,8 +19,14 @@ if [ ! -f "$WASM_FILE" ]; then
 fi
 
 if [ ! -f "$WASM_FILE" ]; then
-  echo "Error: WASM target file not found at $WASM_FILE"
-  exit 1
+  if [ -f "target/wasm32-unknown-unknown/release/stellar_splash_contracts.wasm" ]; then
+    WASM_FILE="target/wasm32-unknown-unknown/release/stellar_splash_contracts.wasm"
+  elif [ -f "target/wasm32-unknown-unknown/release/stellar_splash.wasm" ]; then
+    WASM_FILE="target/wasm32-unknown-unknown/release/stellar_splash.wasm"
+  else
+    echo "Error: WASM target file not found at $WASM_FILE"
+    exit 1
+  fi
 fi
 
 FILE_SIZE_BYTES=$(wc -c < "$WASM_FILE" | tr -d ' ')
@@ -27,9 +39,8 @@ echo "Size: ${FILE_SIZE_BYTES} bytes (~${FILE_SIZE_KB} KB)"
 MAX_ALLOWED_KB=128
 
 if [ "$FILE_SIZE_KB" -gt "$MAX_ALLOWED_KB" ]; then
-  echo "❌ Error: WASM size (${FILE_SIZE_KB} KB) exceeds maximum allowed limit (${MAX_ALLOWED_KB} KB)"
+  echo "Error: WASM size (${FILE_SIZE_KB} KB) exceeds maximum allowed limit (${MAX_ALLOWED_KB} KB)"
   exit 1
 fi
 
-echo "✅ WASM size is within acceptable threshold (< ${MAX_ALLOWED_KB} KB)."
-
+echo "WASM size is within acceptable threshold (< ${MAX_ALLOWED_KB} KB)."

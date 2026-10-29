@@ -56,3 +56,4 @@ The engine analyzes the Shannon entropy of directional changes ($H \ge 2.1$). In
 For tournaments with over 50 participants, payouts are verified via a Merkle Tree:
 - **Leaf**: $\text{Leaf}_i = \text{SHA256}(\text{Rank}_i \parallel \text{PlayerAddress}_i \parallel \text{Amount}_i \parallel \text{Score}_i)$
 - **Contract State**: The contract stores the Merkle root $\mathcal{R}_{\text{tournament}}$ and allows winners to claim prizes trustlessly by presenting their Merkle proof path.
+

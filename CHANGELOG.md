@@ -2,6 +2,14 @@
 
 All notable changes to `stellar-splash-contracts` are documented in this file.
 
+## [1.0.1] - 2026-10-29
+
+### Fixed
+- **Clippy Lint Analysis**: Fixed implicit saturating subtraction and manual division ceiling patterns in contract implementation.
+- **WASM Size Gate**: Updated `scripts/check-wasm-size.sh` to target `stellar_splash_contracts.wasm` with size ceiling checks.
+- **Formatting Standardization**: Enforced clean rustfmt across all contract source and test suites.
+- **Repository Metadata**: Updated GitHub description and added topics (`hackathon`, `protocol-21`, `sbt`, `web3-gaming`).
+
 ## [1.0.0] - 2026-10-29
 
 ### Added

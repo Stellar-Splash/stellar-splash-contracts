@@ -20,3 +20,4 @@ This audit scope defines the boundaries, trust assumptions, and security invaria
 - $\sum \text{Payouts} + \text{Royalty} + \text{Fee} \equiv \text{VaultBalance}$.
 - No negative numbers or integer overflow permitted.
 - Refund claims return exactly the original deposit amount ($100\%$).
+

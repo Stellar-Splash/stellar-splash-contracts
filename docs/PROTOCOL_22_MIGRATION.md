@@ -16,3 +16,4 @@ Stellar Protocol 21/22 introduces enhanced state archiving, optimized cryptograp
 
 ### 2.3 Backward & Forward Compatibility
 - `get_contract_version()` returns `21` on Protocol 21 testnet, and cleanly satisfies Protocol 22 testnet and future mainnet environments without bytecode rebuilds.
+

@@ -23,3 +23,4 @@ if [[ ${#ADMIN_KEY} -ne 56 ]]; then
 fi
 
 echo "[3/3] Deployment Check Passed (Verified for Stellar Testnet Protocol 21/22)!"
+
