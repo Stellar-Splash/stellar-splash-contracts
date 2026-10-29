@@ -1933,6 +1933,86 @@ impl TournamentVaultContract {
 
         Ok(())
     }
+
+    /// Allows a registered or joining player to deposit the required entry fee into the escrow vault.
+    pub fn pay_entry_fee(env: Env, player: Address, tournament_id: u64) -> Result<(), Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
+        player.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.state != TournamentState::Open {
+            return Err(Error::TournamentNotOpen);
+        }
+
+        let fee_key = DataKey::EntryFee(tournament_id);
+        let entry_fee = env
+            .storage()
+            .persistent()
+            .get::<_, EntryFeeConfig>(&fee_key)
+            .unwrap_or(EntryFeeConfig {
+                fee_asset: tournament.prize_asset.clone(),
+                fee_amount: 0,
+            });
+
+        let paid_key = DataKey::PlayerEntryFeePaid(tournament_id, player.clone());
+        if env.storage().persistent().has(&paid_key) {
+            return Err(Error::EntryFeeAlreadyPaid);
+        }
+
+        if entry_fee.fee_amount > 0 {
+            let client = token::Client::new(&env, &entry_fee.fee_asset);
+            client.transfer(
+                &player,
+                &env.current_contract_address(),
+                &entry_fee.fee_amount,
+            );
+
+            let total_fees_key = DataKey::TotalEntryFees(tournament_id);
+            let current_total: i128 = env.storage().persistent().get(&total_fees_key).unwrap_or(0);
+            let new_total = current_total
+                .checked_add(entry_fee.fee_amount)
+                .ok_or(Error::ArithmeticOverflow)?;
+            env.storage().persistent().set(&total_fees_key, &new_total);
+            env.storage().persistent().extend_ttl(
+                &total_fees_key,
+                STORAGE_BUMP_THRESHOLD,
+                STORAGE_LIFETIME_BUMP,
+            );
+
+            let cur_vol: i128 = env
+                .storage()
+                .instance()
+                .get(&DataKey::TotalVolume)
+                .unwrap_or(0);
+            if let Some(new_vol) = cur_vol.checked_add(entry_fee.fee_amount) {
+                env.storage()
+                    .instance()
+                    .set(&DataKey::TotalVolume, &new_vol);
+            }
+        }
+
+        env.storage().persistent().set(&paid_key, &true);
+        env.storage().persistent().extend_ttl(
+            &paid_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
+
+        env.events().publish(
+            (symbol_short!("fee"), symbol_short!("paid")),
+            (tournament_id, player, entry_fee.fee_amount),
+        );
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
