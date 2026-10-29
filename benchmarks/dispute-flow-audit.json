@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-10-29T05:14:04.048Z",
+  "allPassed": true,
+  "checks": [
+    {
+      "id": "DISP-001",
+      "name": "Structured Dispute Window Query",
+      "description": "Exposes get_tournament_dispute_window returning end timestamp and elapsed flag",
+      "passed": true,
+      "evidence": "DisputeWindowInfo struct and query method confirmed"
+    },
+    {
+      "id": "DISP-002",
+      "name": "Administrative Dispute Window Extension",
+      "description": "extend_dispute_window entrypoint protected by admin authorization",
+      "passed": true,
+      "evidence": "extend_dispute_window entrypoint verified with require_auth"
+    },
+    {
+      "id": "DISP-003",
+      "name": "Minimum Dispute Window Constraint",
+      "description": "Enforces minimum dispute window duration of at least 300 seconds (5 minutes)",
+      "passed": true,
+      "evidence": "MIN_DISPUTE_WINDOW_SECONDS = 300 constant confirmed"
+    },
+    {
+      "id": "SETT-004",
+      "name": "Disbursed Prize Amount Query",
+      "description": "Exposes get_settled_amount returning total settled tokens for tournament",
+      "passed": true,
+      "evidence": "get_settled_amount query method verified"
+    },
+    {
+      "id": "SETT-005",
+      "name": "Settlement Status Query",
+      "description": "Exposes get_tournament_settlement_status returning Option<SettlementStatus>",
+      "passed": true,
+      "evidence": "get_tournament_settlement_status method verified"
+    }
+  ]
+}
