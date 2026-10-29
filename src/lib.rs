@@ -237,6 +237,7 @@ enum DataKey {
     Paused,
     TreasuryAddress,
     TreasuryFeeBps,
+    TotalSettledAmount,
 }
 
 #[contract]
@@ -254,6 +255,9 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::TournamentCount, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalSettledAmount, &0i128);
         env.storage()
             .instance()
             .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
@@ -1475,6 +1479,19 @@ impl TournamentVaultContract {
             .ok_or(Error::ArithmeticOverflow)?;
         env.storage().persistent().set(&tourn_key, &tournament);
 
+        let total_settled_key = DataKey::TotalSettledAmount;
+        let prev_settled: i128 = env
+            .storage()
+            .instance()
+            .get(&total_settled_key)
+            .unwrap_or(0i128);
+        let new_settled = prev_settled
+            .checked_add(record.total_amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage()
+            .instance()
+            .set(&total_settled_key, &new_settled);
+
         record.status = SettlementStatus::Settled;
         record.settled_at = env.ledger().timestamp();
         env.storage().persistent().set(&settle_key, &record);
@@ -1512,6 +1529,14 @@ impl TournamentVaultContract {
             Ok(s) => s.status == SettlementStatus::Settled,
             Err(_) => false,
         }
+    }
+
+    /// Returns the cumulative prize amount settled across all tournaments in the vault.
+    pub fn get_total_settled_amount(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalSettledAmount)
+            .unwrap_or(0i128)
     }
 }
 
