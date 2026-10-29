@@ -929,3 +929,149 @@ fn test_tournament_details_treasury_and_settled_amount() {
     assert_eq!(token_client.balance(&winner), prize_pool);
 }
 
+#[test]
+fn test_metadata_uri_participant_bounds_and_dispute_window() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let winner = Address::generate(&env);
+
+    // 1. Participant bounds rejection: max_participants = 0
+    let zero_part_config = TournamentConfig {
+        tournament_id: 401,
+        title: String::from_str(&env, "Zero Capacity Tournament"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: 10_000_000,
+        max_participants: 0,
+        start_time: 1000,
+        end_time: 2000,
+    };
+    assert_eq!(
+        client.try_create_tournament(&creator, &zero_part_config),
+        Err(Ok(Error::InvalidMaxParticipants))
+    );
+
+    // 2. Participant bounds rejection: max_participants > 10,000
+    let over_part_config = TournamentConfig {
+        tournament_id: 402,
+        title: String::from_str(&env, "Excess Capacity Tournament"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: 10_000_000,
+        max_participants: 10_001,
+        start_time: 1000,
+        end_time: 2000,
+    };
+    assert_eq!(
+        client.try_create_tournament(&creator, &over_part_config),
+        Err(Ok(Error::InvalidMaxParticipants))
+    );
+
+    // 3. Asset Whitelisting
+    assert_eq!(client.is_asset_whitelisted(&token_client.address), false);
+    client.set_asset_whitelisted(&token_client.address, &true);
+    assert_eq!(client.is_asset_whitelisted(&token_client.address), true);
+    client.set_asset_whitelisted(&token_client.address, &false);
+    assert_eq!(client.is_asset_whitelisted(&token_client.address), false);
+
+    // 4. Valid tournament creation & metadata URI
+    let prize_pool: i128 = 25_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id: u64 = 403;
+    let valid_config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Dispute Window Cup"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &valid_config);
+
+    // Initial metadata URI is None
+    assert_eq!(client.get_tournament_metadata_uri(&tournament_id), None);
+
+    let ipfs_uri = String::from_str(&env, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    client.set_tournament_metadata_uri(&creator, &tournament_id, &ipfs_uri);
+    assert_eq!(client.get_tournament_metadata_uri(&tournament_id), Some(ipfs_uri));
+
+    // Progress through funding, opening, completion
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+    client.open_tournament(&creator, &tournament_id);
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(2001);
+    client.complete_tournament(&creator, &tournament_id);
+
+    let ranking_hash = BytesN::from_array(&env, &[0x33; 32]);
+    client.record_ranking_hash(&creator, &tournament_id, &1, &ranking_hash);
+
+    let agreement_hash = BytesN::from_array(&env, &[0x44; 32]);
+    client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
+    client.lock_prize_agreement(&creator, &tournament_id, &1);
+
+    let mut allocations = soroban_sdk::Vec::new(&env);
+    allocations.push_back(RecipientAllocation {
+        recipient: winner.clone(),
+        rank: 1,
+        amount: prize_pool,
+    });
+
+    let settlement_hash = BytesN::from_array(&env, &[0x55; 32]);
+    let input = SettlementInput {
+        tournament_id,
+        agreement_version: 1,
+        agreement_hash,
+        ranking_version: 1,
+        ranking_hash,
+        settlement_hash,
+        allocations,
+    };
+
+    client.authorize_settlement(&creator, &input);
+
+    // 5. Dispute Window testing
+    // Opening dispute window with duration < MIN_DISPUTE_WINDOW_SECONDS (300s) fails
+    assert_eq!(
+        client.try_open_dispute_window(&creator, &tournament_id, &299),
+        Err(Ok(Error::TournamentDurationTooShort))
+    );
+
+    // Open dispute window of 300s at ledger timestamp 2001 -> ends at 2301
+    let end_ts = client.open_dispute_window(&creator, &tournament_id, &300);
+    assert_eq!(end_ts, 2301);
+    assert_eq!(client.get_dispute_window_end(&tournament_id), Some(2301));
+    assert_eq!(client.is_dispute_window_elapsed(&tournament_id), false);
+
+    // Attempting settlement before dispute window elapses fails with DisputeWindowNotElapsed
+    assert_eq!(
+        client.try_execute_settlement(&creator, &tournament_id),
+        Err(Ok(Error::DisputeWindowNotElapsed))
+    );
+
+    // Fast-forward ledger timestamp to 2301 (dispute window elapsed)
+    env.ledger().set_timestamp(2301);
+    assert_eq!(client.is_dispute_window_elapsed(&tournament_id), true);
+
+    // Settlement now executes successfully
+    let settled = client.execute_settlement(&creator, &tournament_id);
+    assert_eq!(settled.status, SettlementStatus::Settled);
+    assert_eq!(token_client.balance(&winner), prize_pool);
+}
+
+
