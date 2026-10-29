@@ -26,3 +26,4 @@ const targetPath = path.join(__dirname, '..', 'benchmarks', 'gas-cost-matrix.jso
 fs.writeFileSync(targetPath, JSON.stringify(matrix, null, 2), 'utf8');
 
 console.log(`✅ Gas cost matrix updated at ${targetPath}`);
+

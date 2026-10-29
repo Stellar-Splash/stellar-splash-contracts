@@ -9,3 +9,4 @@ echo "Running invariant test suite..."
 cargo test test_invariants -- --nocapture
 
 echo "✅ All mathematical and state invariants held."
+

@@ -32,3 +32,4 @@ if [ "$FILE_SIZE_KB" -gt "$MAX_ALLOWED_KB" ]; then
 fi
 
 echo "✅ WASM size is within acceptable threshold (< ${MAX_ALLOWED_KB} KB)."
+

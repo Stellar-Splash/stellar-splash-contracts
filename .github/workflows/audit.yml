@@ -17,3 +17,4 @@ jobs:
 
       - name: Run Cargo Audit
         run: cargo audit
+
