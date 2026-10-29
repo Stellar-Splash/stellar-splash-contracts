@@ -1,0 +1,81 @@
+{
+  "timestamp": 1793242438564,
+  "targetContract": "CACHWJEZY6JN36VFACWRQ7FP4T5EPRRRNBVLOSFHXTJHETZY36JD7QYJ",
+  "protocolVersion": 21,
+  "ttlBumpThresholdLedgers": 17280,
+  "ttlExtensionTargetLedgers": 518400,
+  "operations": [
+    {
+      "operation": "initialize",
+      "cpuInstructions": 650000,
+      "ramBytes": 18500,
+      "readBytes": 1200,
+      "writeBytes": 1800,
+      "estimatedStroopFee": 45000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "create_tournament",
+      "cpuInstructions": 1240000,
+      "ramBytes": 38200,
+      "readBytes": 4500,
+      "writeBytes": 8200,
+      "estimatedStroopFee": 100000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "fund_prize_pool",
+      "cpuInstructions": 1520000,
+      "ramBytes": 48600,
+      "readBytes": 6200,
+      "writeBytes": 9500,
+      "estimatedStroopFee": 120000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "register_participant",
+      "cpuInstructions": 780000,
+      "ramBytes": 24100,
+      "readBytes": 3800,
+      "writeBytes": 5400,
+      "estimatedStroopFee": 75000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "pay_entry_fee",
+      "cpuInstructions": 1380000,
+      "ramBytes": 44200,
+      "readBytes": 5900,
+      "writeBytes": 8800,
+      "estimatedStroopFee": 115000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "submit_dispute",
+      "cpuInstructions": 920000,
+      "ramBytes": 29500,
+      "readBytes": 4100,
+      "writeBytes": 6200,
+      "estimatedStroopFee": 90000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "resolve_dispute",
+      "cpuInstructions": 850000,
+      "ramBytes": 26800,
+      "readBytes": 3900,
+      "writeBytes": 5600,
+      "estimatedStroopFee": 80000,
+      "safetyRating": "OPTIMAL"
+    },
+    {
+      "operation": "execute_settlement",
+      "cpuInstructions": 3450000,
+      "ramBytes": 118000,
+      "readBytes": 15400,
+      "writeBytes": 24800,
+      "estimatedStroopFee": 250000,
+      "safetyRating": "OPTIMAL"
+    }
+  ]
+}
