@@ -294,6 +294,18 @@ pub struct ContractStats {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TournamentSummary {
+    pub tournament_id: u64,
+    pub state: TournamentState,
+    pub prize_asset: Address,
+    pub target_prize_amount: i128,
+    pub current_funded_amount: i128,
+    pub current_participants: u32,
+    pub max_participants: u32,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -2443,6 +2455,52 @@ impl TournamentVaultContract {
             is_paused,
             treasury_fee_bps,
         }
+    }
+
+    /// Returns paginated slice of tournament summaries for high-throughput indexers and frontend discovery.
+    pub fn get_tournament_summaries(
+        env: Env,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<TournamentSummary> {
+        let id_list: Vec<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::TournamentIdList)
+            .unwrap_or(Vec::new(&env));
+
+        let mut summaries = Vec::new(&env);
+        let total = id_list.len();
+        if offset >= total {
+            return summaries;
+        }
+
+        let end = if offset + limit > total {
+            total
+        } else {
+            offset + limit
+        };
+
+        for i in offset..end {
+            if let Some(id) = id_list.get(i) {
+                if let Some(t) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, TournamentInfo>(&DataKey::Tournament(id))
+                {
+                    summaries.push_back(TournamentSummary {
+                        tournament_id: t.tournament_id,
+                        state: t.state,
+                        prize_asset: t.prize_asset,
+                        target_prize_amount: t.target_prize_amount,
+                        current_funded_amount: t.current_funded_amount,
+                        current_participants: t.current_participants,
+                        max_participants: t.max_participants,
+                    });
+                }
+            }
+        }
+        summaries
     }
 
     /// Returns the active contract/protocol version (Protocol 21).
