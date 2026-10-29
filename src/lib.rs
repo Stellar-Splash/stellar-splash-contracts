@@ -43,12 +43,15 @@ pub enum Error {
     TitleTooLong = 32,
     GameIdTooLong = 33,
     InvalidTreasuryFeeBps = 34,
+    TournamentDurationTooShort = 35,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
 pub const MAX_STRING_LENGTH: u32 = 128;
 /// Maximum allowable treasury fee in basis points (1,000 bps = 10.00%)
 pub const MAX_TREASURY_FEE_BPS: u32 = 1_000;
+/// Minimum allowable tournament duration in seconds (60 seconds)
+pub const MIN_TOURNAMENT_DURATION: u64 = 60;
 /// Ledger threshold (~1 day at 5 seconds per ledger)
 pub const STORAGE_BUMP_THRESHOLD: u32 = 17_280;
 /// Ledger extension target (~30 days at 5 seconds per ledger)
@@ -391,6 +394,9 @@ impl TournamentVaultContract {
         }
         if config.end_time <= config.start_time {
             return Err(Error::InvalidTimeBounds);
+        }
+        if config.end_time < config.start_time + MIN_TOURNAMENT_DURATION {
+            return Err(Error::TournamentDurationTooShort);
         }
         if config.title.len() > MAX_STRING_LENGTH {
             return Err(Error::TitleTooLong);
