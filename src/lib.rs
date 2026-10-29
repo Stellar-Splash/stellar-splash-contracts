@@ -3225,6 +3225,11 @@ impl TournamentVaultContract {
             .unwrap_or(Vec::new(&env))
     }
 
+    /// Returns the total count of Soulbound Achievement Badges earned by a player.
+    pub fn get_player_badge_count(env: Env, player: Address) -> u32 {
+        Self::get_player_badges(env, player).len()
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
