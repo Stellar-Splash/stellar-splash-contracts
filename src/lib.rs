@@ -2832,6 +2832,16 @@ impl TournamentVaultContract {
         sponsors.len()
     }
 
+    /// Returns the total amount contributed by a specific sponsor for a tournament.
+    pub fn get_sponsor_contribution(
+        env: Env,
+        tournament_id: u64,
+        sponsor: Address,
+    ) -> i128 {
+        let contrib_key = DataKey::SponsorContribution(tournament_id, sponsor);
+        env.storage().persistent().get(&contrib_key).unwrap_or(0)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
