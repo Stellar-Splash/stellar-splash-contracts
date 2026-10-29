@@ -2917,6 +2917,14 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Returns the active minimum allowable prize amount threshold.
+    pub fn get_min_prize_amount(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MinPrizeAmount)
+            .unwrap_or(MIN_PRIZE_AMOUNT)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
