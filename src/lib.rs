@@ -1000,6 +1000,9 @@ impl TournamentVaultContract {
         record.locked_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&agr_key, &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveAgreementVersion(tournament_id), &version);
 
         env.events().publish(
             (symbol_short!("agree"), symbol_short!("locked")),
@@ -1037,6 +1040,17 @@ impl TournamentVaultContract {
     ) -> Result<AgreementStatus, Error> {
         let agr = Self::get_prize_agreement(env, tournament_id, version)?;
         Ok(agr.status)
+    }
+
+    /// Retrieve the currently active agreement version for a tournament.
+    pub fn get_active_agreement_version(
+        env: Env,
+        tournament_id: u64,
+    ) -> Result<u32, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ActiveAgreementVersion(tournament_id))
+            .ok_or(Error::AgreementNotFound)
     }
 
     /// Query tournament details.
