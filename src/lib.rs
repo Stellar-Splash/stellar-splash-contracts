@@ -455,6 +455,29 @@ impl TournamentVaultContract {
             .unwrap_or(0)
     }
 
+    /// Computes the estimated protocol treasury fee for a specific tournament based on current funded amount.
+    pub fn get_tournament_treasury_fee(env: Env, tournament_id: u64) -> Result<i128, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TreasuryFeeBps)
+            .unwrap_or(0);
+
+        if fee_bps == 0 || info.current_funded_amount <= 0 {
+            return Ok(0);
+        }
+
+        let fee = (info.current_funded_amount * (fee_bps as i128)) / 10_000;
+        Ok(fee)
+    }
+
     /// Whitelists or de-whitelists an asset for tournament prize pools (admin only).
     pub fn set_asset_whitelisted(env: Env, asset: Address, whitelisted: bool) -> Result<(), Error> {
         let admin: Address = env
