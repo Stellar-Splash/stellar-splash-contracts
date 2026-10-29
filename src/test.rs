@@ -62,6 +62,7 @@ fn test_tournament_full_lifecycle() {
 
     // Fund and open
     client.fund_prize_pool(&funder, &tournament_id, &prize_amount);
+    assert_eq!(client.get_vault_funder(&tournament_id), funder);
     client.open_tournament(&creator, &tournament_id);
 
     // Register players

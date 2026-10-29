@@ -217,6 +217,7 @@ enum DataKey {
     Settlement(u64),
     SettlementAllocations(u64),
     ParticipantList(u64),
+    VaultFunder(u64),
     Paused,
 }
 
@@ -443,6 +444,14 @@ impl TournamentVaultContract {
             tournament.state = TournamentState::Funded;
         }
 
+        let funder_key = DataKey::VaultFunder(tournament_id);
+        if !env.storage().persistent().has(&funder_key) {
+            env.storage().persistent().set(&funder_key, &funder);
+            env.storage()
+                .persistent()
+                .extend_ttl(&funder_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        }
+
         env.storage().persistent().set(&key, &tournament);
 
         env.events().publish(
@@ -518,6 +527,14 @@ impl TournamentVaultContract {
 
         if tournament.current_funded_amount >= tournament.target_prize_amount {
             tournament.state = TournamentState::Funded;
+        }
+
+        let funder_key = DataKey::VaultFunder(tournament_id);
+        if !env.storage().persistent().has(&funder_key) {
+            env.storage().persistent().set(&funder_key, &funder);
+            env.storage()
+                .persistent()
+                .extend_ttl(&funder_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
         }
 
         env.storage().persistent().set(&key, &tournament);
@@ -1124,6 +1141,15 @@ impl TournamentVaultContract {
     pub fn get_vault_balance(env: Env, tournament_id: u64) -> Result<i128, Error> {
         let t = Self::get_tournament(env, tournament_id)?;
         Ok(t.current_funded_amount)
+    }
+
+    /// Retrieve the address that funded the prize pool for a tournament.
+    pub fn get_vault_funder(env: Env, tournament_id: u64) -> Result<Address, Error> {
+        let funder_key = DataKey::VaultFunder(tournament_id);
+        env.storage()
+            .persistent()
+            .get(&funder_key)
+            .ok_or(Error::TournamentNotFunded)
     }
 
     /// Lightweight view function returning the tournament state without heavy deserialization.
