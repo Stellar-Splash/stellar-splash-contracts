@@ -1976,6 +1976,14 @@ impl TournamentVaultContract {
             .unwrap_or(false)
     }
 
+    /// Checks whether an on-chain dispute record exists and is in Active status.
+    pub fn is_dispute_active(env: Env, tournament_id: u64) -> bool {
+        match Self::get_dispute_status(env, tournament_id) {
+            Some(d) => d.status == DisputeStatus::Active,
+            None => false,
+        }
+    }
+
     /// Resolves an active dispute, clearing the hold on settlement (admin only).
     pub fn resolve_dispute(env: Env, admin: Address, tournament_id: u64) -> Result<(), Error> {
         let stored_admin: Address = env
