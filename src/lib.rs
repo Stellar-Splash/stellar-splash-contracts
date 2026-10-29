@@ -2717,6 +2717,21 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Extends the persistent storage TTL for a finalized settlement record.
+    pub fn extend_settlement_storage_ttl(
+        env: Env,
+        tournament_id: u64,
+    ) -> Result<(), Error> {
+        let set_key = DataKey::Settlement(tournament_id);
+        if !env.storage().persistent().has(&set_key) {
+            return Err(Error::SettlementNotFound);
+        }
+        env.storage()
+            .persistent()
+            .extend_ttl(&set_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
