@@ -1262,3 +1262,89 @@ fn test_upgrade_authorization() {
         Err(Ok(Error::Unauthorized))
     );
 }
+
+#[test]
+fn test_entry_fee_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let player1 = Address::generate(&env);
+    let player2 = Address::generate(&env);
+
+    let prize_amount: i128 = 20_000_000;
+    token_asset.mint(&funder, &prize_amount);
+
+    let tournament_id: u64 = 888;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Entry Fee Arena"),
+        game_id: String::from_str(&env, "splash-rush"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize_amount);
+
+    // Creator configures entry fee
+    let entry_fee_amount: i128 = 5_000_000;
+    client.set_entry_fee(
+        &creator,
+        &tournament_id,
+        &token_client.address,
+        &entry_fee_amount,
+    );
+
+    let fee_config = client.get_entry_fee(&tournament_id);
+    assert_eq!(fee_config.fee_amount, entry_fee_amount);
+    assert_eq!(fee_config.fee_asset, token_client.address);
+
+    client.open_tournament(&creator, &tournament_id);
+
+    // Mint tokens to players for entry fee
+    token_asset.mint(&player1, &entry_fee_amount);
+    token_asset.mint(&player2, &entry_fee_amount);
+
+    // Player 1 pays entry fee
+    client.pay_entry_fee(&player1, &tournament_id);
+    assert_eq!(client.has_paid_entry_fee(&tournament_id, &player1), true);
+    assert_eq!(client.has_paid_entry_fee(&tournament_id, &player2), false);
+    assert_eq!(
+        client.get_total_entry_fees(&tournament_id),
+        entry_fee_amount
+    );
+
+    // Duplicate payment fails
+    assert_eq!(
+        client.try_pay_entry_fee(&player1, &tournament_id),
+        Err(Ok(Error::EntryFeeAlreadyPaid))
+    );
+
+    // Player 2 pays entry fee
+    client.pay_entry_fee(&player2, &tournament_id);
+    assert_eq!(client.has_paid_entry_fee(&tournament_id, &player2), true);
+    assert_eq!(
+        client.get_total_entry_fees(&tournament_id),
+        entry_fee_amount * 2
+    );
+
+    // Contract vault token balance is prize_amount + 2 * entry_fee_amount
+    assert_eq!(
+        client.get_contract_token_balance(&token_client.address),
+        prize_amount + entry_fee_amount * 2
+    );
+}
