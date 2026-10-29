@@ -53,6 +53,9 @@ pub enum Error {
     EntryFeeAlreadyPaid = 42,
     InvalidSponsorAmount = 43,
     TournamentNotCancellable = 44,
+    ProposedAdminNotFound = 45,
+    InvalidRoyaltyBps = 46,
+    BannerUriTooLong = 47,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
@@ -308,6 +311,27 @@ pub struct TournamentSummary {
 }
 
 #[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum BadgeType {
+    TournamentChampion = 1,
+    RunnerUp = 2,
+    BronzeFinisher = 3,
+    HighScorer = 4,
+    VeteranPlayer = 5,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AchievementBadge {
+    pub badge_id: u64,
+    pub player: Address,
+    pub tournament_id: u64,
+    pub badge_type: BadgeType,
+    pub awarded_at: u64,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -344,6 +368,11 @@ enum DataKey {
     MinPrizeAmount,
     MaxParticipantsLimit,
     DefaultDisputeWindow,
+    PlayerBadges(Address),
+    BadgeCount,
+    ProposedAdmin,
+    TournamentBannerUri(u64),
+    CreatorRoyaltyBps(u64),
 }
 
 #[contract]
@@ -3124,6 +3153,67 @@ impl TournamentVaultContract {
             .get(&DataKey::Tournament(tournament_id))
             .ok_or(Error::TournamentNotFound)?;
         Ok(t.game_id)
+    }
+
+    /// Awards a non-transferable Soulbound Achievement Badge (SBT) to a player for tournament accomplishments.
+    pub fn award_champion_badge(
+        env: Env,
+        admin: Address,
+        player: Address,
+        tournament_id: u64,
+        badge_type: BadgeType,
+    ) -> Result<AchievementBadge, Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+
+        let badge_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::BadgeCount)
+            .unwrap_or(0);
+        let badge_id = badge_count
+            .checked_add(1)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::BadgeCount, &badge_id);
+
+        let badge = AchievementBadge {
+            badge_id,
+            player: player.clone(),
+            tournament_id,
+            badge_type,
+            awarded_at: env.ledger().timestamp(),
+        };
+
+        let badges_key = DataKey::PlayerBadges(player.clone());
+        let mut badges: Vec<AchievementBadge> = env
+            .storage()
+            .persistent()
+            .get(&badges_key)
+            .unwrap_or(Vec::new(&env));
+        badges.push_back(badge.clone());
+        env.storage().persistent().set(&badges_key, &badges);
+
+        env.storage().persistent().extend_ttl(
+            &badges_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
+
+        env.events().publish(
+            (symbol_short!("badge"), symbol_short!("award")),
+            (badge_id, player, tournament_id, badge_type as u32),
+        );
+
+        Ok(badge)
     }
 
     /// Returns the active contract/protocol version (Protocol 21).
