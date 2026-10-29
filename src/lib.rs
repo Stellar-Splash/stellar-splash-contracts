@@ -248,6 +248,7 @@ enum DataKey {
     TreasuryAddress,
     TreasuryFeeBps,
     TotalSettledAmount,
+    TotalVolume,
     TournamentMetadataUri(u64),
     WhitelistedAsset(Address),
     DisputeWindow(u64),
@@ -271,6 +272,9 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .set(&DataKey::TotalSettledAmount, &0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalVolume, &0i128);
         env.storage()
             .instance()
             .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
@@ -568,6 +572,11 @@ impl TournamentVaultContract {
 
         env.storage().persistent().set(&key, &tournament);
 
+        let cur_vol: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+        if let Some(new_vol) = cur_vol.checked_add(deposit_amount) {
+            env.storage().instance().set(&DataKey::TotalVolume, &new_vol);
+        }
+
         env.events().publish(
             (symbol_short!("prize"), symbol_short!("funded")),
             (
@@ -654,6 +663,11 @@ impl TournamentVaultContract {
         }
 
         env.storage().persistent().set(&key, &tournament);
+
+        let cur_vol: i128 = env.storage().instance().get(&DataKey::TotalVolume).unwrap_or(0);
+        if let Some(new_vol) = cur_vol.checked_add(deposit_amount) {
+            env.storage().instance().set(&DataKey::TotalVolume, &new_vol);
+        }
 
         env.events().publish(
             (symbol_short!("prize"), symbol_short!("funded")),
@@ -1637,6 +1651,14 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .get(&DataKey::TotalSettledAmount)
+            .unwrap_or(0i128)
+    }
+
+    /// Returns the cumulative prize pool volume deposited across all tournaments in the vault.
+    pub fn get_total_volume(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalVolume)
             .unwrap_or(0i128)
     }
 
