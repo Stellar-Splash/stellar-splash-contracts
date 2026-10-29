@@ -3363,6 +3363,12 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Returns the registered visual banner image URI for a tournament, or None.
+    pub fn get_tournament_banner_uri(env: Env, tournament_id: u64) -> Option<String> {
+        let uri_key = DataKey::TournamentBannerUri(tournament_id);
+        env.storage().persistent().get(&uri_key)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
