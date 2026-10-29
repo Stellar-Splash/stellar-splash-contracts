@@ -3439,6 +3439,15 @@ impl TournamentVaultContract {
         Self::get_dispute_status(env, tournament_id).map(|r| r.challenger)
     }
 
+    /// Returns true if the tournament is currently in the InProgress state.
+    pub fn is_tournament_in_progress(env: Env, tournament_id: u64) -> bool {
+        if let Ok(state) = Self::get_tournament_status(env, tournament_id) {
+            state == TournamentState::InProgress
+        } else {
+            false
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
