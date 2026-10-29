@@ -2995,6 +2995,14 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Returns the active default dispute window duration in seconds.
+    pub fn get_default_dispute_window_duration(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::DefaultDisputeWindow)
+            .unwrap_or(MIN_DISPUTE_WINDOW_SECONDS)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
