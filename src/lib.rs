@@ -3109,6 +3109,16 @@ impl TournamentVaultContract {
         Ok(t.title)
     }
 
+    /// Returns the associated game identifier of the tournament.
+    pub fn get_tournament_game_id(env: Env, tournament_id: u64) -> Result<String, Error> {
+        let t: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Tournament(tournament_id))
+            .ok_or(Error::TournamentNotFound)?;
+        Ok(t.game_id)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
