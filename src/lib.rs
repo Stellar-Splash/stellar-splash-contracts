@@ -2083,6 +2083,50 @@ impl TournamentVaultContract {
             .get(&DataKey::PlayerEntryFeePaid(tournament_id, player))
             .unwrap_or(false)
     }
+
+    /// Records an on-chain tournament victory for a player (admin only).
+    pub fn increment_player_wins(env: Env, admin: Address, player: Address) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let stats_key = DataKey::PlayerStats(player.clone());
+        let mut stats: PlayerStatsRecord =
+            env.storage()
+                .persistent()
+                .get(&stats_key)
+                .unwrap_or(PlayerStatsRecord {
+                    player: player.clone(),
+                    tournaments_joined: 0,
+                    tournaments_won: 0,
+                    total_score: 0,
+                });
+
+        stats.tournaments_won = stats
+            .tournaments_won
+            .checked_add(1)
+            .ok_or(Error::ArithmeticOverflow)?;
+
+        env.storage().persistent().set(&stats_key, &stats);
+        env.storage().persistent().extend_ttl(
+            &stats_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
+
+        env.events().publish(
+            (symbol_short!("player"), symbol_short!("win")),
+            (player, stats.tournaments_won),
+        );
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
