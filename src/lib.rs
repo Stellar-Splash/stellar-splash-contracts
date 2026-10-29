@@ -42,10 +42,13 @@ pub enum Error {
     TournamentNotEnded = 31,
     TitleTooLong = 32,
     GameIdTooLong = 33,
+    InvalidTreasuryFeeBps = 34,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
 pub const MAX_STRING_LENGTH: u32 = 128;
+/// Maximum allowable treasury fee in basis points (1,000 bps = 10.00%)
+pub const MAX_TREASURY_FEE_BPS: u32 = 1_000;
 /// Ledger threshold (~1 day at 5 seconds per ledger)
 pub const STORAGE_BUMP_THRESHOLD: u32 = 17_280;
 /// Ledger extension target (~30 days at 5 seconds per ledger)
@@ -232,6 +235,8 @@ enum DataKey {
     ParticipantList(u64),
     VaultFunder(u64),
     Paused,
+    TreasuryAddress,
+    TreasuryFeeBps,
 }
 
 #[contract]
@@ -327,6 +332,43 @@ impl TournamentVaultContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    /// Configure protocol treasury address and optional basis-point fee (admin only).
+    pub fn set_treasury(
+        env: Env,
+        treasury: Address,
+        fee_bps: u32,
+    ) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+
+        if fee_bps > MAX_TREASURY_FEE_BPS {
+            return Err(Error::InvalidTreasuryFeeBps);
+        }
+
+        env.storage().instance().set(&DataKey::TreasuryAddress, &treasury);
+        env.storage().instance().set(&DataKey::TreasuryFeeBps, &fee_bps);
+
+        env.events().publish(
+            (symbol_short!("treasury"), symbol_short!("set")),
+            (treasury, fee_bps),
+        );
+        Ok(())
+    }
+
+    /// Retrieve the configured protocol treasury address (if set).
+    pub fn get_treasury_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::TreasuryAddress)
+    }
+
+    /// Retrieve the configured protocol treasury fee in basis points.
+    pub fn get_treasury_fee_bps(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::TreasuryFeeBps).unwrap_or(0)
     }
 
     /// Create a new tournament record.
