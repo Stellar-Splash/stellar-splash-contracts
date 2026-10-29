@@ -1504,3 +1504,121 @@ fn test_dispute_dismissal_and_contract_version() {
         .expect("dispute record exists");
     assert_eq!(dismissed_status.status, DisputeStatus::Dismissed);
 }
+
+#[test]
+fn test_dispute_window_extension_and_settlement_queries() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let winner = Address::generate(&env);
+
+    let prize_pool: i128 = 25_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id = 801;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Extension & Queries Cup"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 8,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+    client.open_tournament(&creator, &tournament_id);
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(2001);
+    client.complete_tournament(&creator, &tournament_id);
+
+    // Initial query states before window or settlement
+    assert_eq!(client.get_tournament_dispute_window(&tournament_id), None);
+    assert_eq!(client.get_settled_amount(&tournament_id), 0);
+    assert_eq!(
+        client.get_tournament_settlement_status(&tournament_id),
+        None
+    );
+
+    // Open dispute window of 300s (ledger ts 2001 -> ends at 2301)
+    client.open_dispute_window(&creator, &tournament_id, &300);
+    let window_info = client
+        .get_tournament_dispute_window(&tournament_id)
+        .expect("window info exists");
+    assert_eq!(window_info.end_timestamp, 2301);
+    assert_eq!(window_info.is_elapsed, false);
+
+    // Non-admin cannot extend dispute window
+    assert_eq!(
+        client.try_extend_dispute_window(&non_admin, &tournament_id, &150),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // Admin extends dispute window by 150s (2301 + 150 = 2451)
+    let new_end = client.extend_dispute_window(&admin, &tournament_id, &150);
+    assert_eq!(new_end, 2451);
+
+    let extended_info = client
+        .get_tournament_dispute_window(&tournament_id)
+        .expect("extended window info exists");
+    assert_eq!(extended_info.end_timestamp, 2451);
+    assert_eq!(extended_info.is_elapsed, false);
+
+    // Authorize and execute settlement after dispute window elapses
+    let ranking_hash = BytesN::from_array(&env, &[0x11; 32]);
+    client.record_ranking_hash(&creator, &tournament_id, &1, &ranking_hash);
+
+    let agreement_hash = BytesN::from_array(&env, &[0x22; 32]);
+    client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
+    client.lock_prize_agreement(&creator, &tournament_id, &1);
+
+    let mut allocations = soroban_sdk::Vec::new(&env);
+    allocations.push_back(RecipientAllocation {
+        recipient: winner.clone(),
+        rank: 1,
+        amount: prize_pool,
+    });
+
+    let settlement_hash = BytesN::from_array(&env, &[0x33; 32]);
+    let input = SettlementInput {
+        tournament_id,
+        agreement_version: 1,
+        agreement_hash,
+        ranking_version: 1,
+        ranking_hash,
+        settlement_hash,
+        allocations,
+    };
+    client.authorize_settlement(&creator, &input);
+
+    // Fast-forward past extended dispute window (2455)
+    env.ledger().set_timestamp(2455);
+    let post_window = client
+        .get_tournament_dispute_window(&tournament_id)
+        .expect("post window exists");
+    assert_eq!(post_window.is_elapsed, true);
+
+    // Execute settlement
+    client.execute_settlement(&creator, &tournament_id);
+
+    // Verify settlement queries
+    assert_eq!(client.get_settled_amount(&tournament_id), prize_pool);
+    assert_eq!(
+        client.get_tournament_settlement_status(&tournament_id),
+        Some(SettlementStatus::Settled)
+    );
+}
