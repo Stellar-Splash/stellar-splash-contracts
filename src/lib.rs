@@ -3216,6 +3216,15 @@ impl TournamentVaultContract {
         Ok(badge)
     }
 
+    /// Returns all Soulbound Achievement Badges earned by a player.
+    pub fn get_player_badges(env: Env, player: Address) -> Vec<AchievementBadge> {
+        let badges_key = DataKey::PlayerBadges(player);
+        env.storage()
+            .persistent()
+            .get(&badges_key)
+            .unwrap_or(Vec::new(&env))
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
