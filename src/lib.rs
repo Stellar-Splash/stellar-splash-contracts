@@ -3420,6 +3420,11 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Checks whether an asset address is explicitly whitelisted or authorized for prize pool deposits.
+    pub fn check_is_asset_whitelisted_or_xlm(env: Env, asset: Address) -> bool {
+        Self::is_asset_whitelisted(env, asset)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
