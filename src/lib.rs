@@ -50,6 +50,7 @@ pub enum Error {
     DisputeAlreadySubmitted = 39,
     TournamentDisputed = 40,
     DisputeWindowElapsed = 41,
+    EntryFeeAlreadyPaid = 42,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
@@ -242,6 +243,13 @@ pub struct DisputeRecord {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EntryFeeConfig {
+    pub fee_asset: Address,
+    pub fee_amount: i128,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -266,6 +274,9 @@ enum DataKey {
     DisputeWindow(u64),
     DisputeRecord(u64, Address),
     TournamentDisputedFlag(u64),
+    EntryFee(u64),
+    TotalEntryFees(u64),
+    PlayerEntryFeePaid(u64, Address),
 }
 
 #[contract]
@@ -1864,6 +1875,62 @@ impl TournamentVaultContract {
         env.storage()
             .instance()
             .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
+    }
+
+    /// Configures optional entry fee asset and amount required for players to join (creator only).
+    pub fn set_entry_fee(
+        env: Env,
+        creator: Address,
+        tournament_id: u64,
+        fee_asset: Address,
+        fee_amount: i128,
+    ) -> Result<(), Error> {
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
+        creator.require_auth();
+
+        if fee_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != creator {
+            return Err(Error::Unauthorized);
+        }
+
+        if tournament.state != TournamentState::Created
+            && tournament.state != TournamentState::Funding
+            && tournament.state != TournamentState::Funded
+        {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        let fee_key = DataKey::EntryFee(tournament_id);
+        let config = EntryFeeConfig {
+            fee_asset: fee_asset.clone(),
+            fee_amount,
+        };
+
+        env.storage().persistent().set(&fee_key, &config);
+        env.storage().persistent().extend_ttl(
+            &fee_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
+
+        env.events().publish(
+            (symbol_short!("fee"), symbol_short!("set")),
+            (tournament_id, fee_asset, fee_amount),
+        );
+
         Ok(())
     }
 }
