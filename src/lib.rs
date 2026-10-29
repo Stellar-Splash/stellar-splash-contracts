@@ -3415,13 +3415,13 @@ impl TournamentVaultContract {
         if bps == 0 {
             0
         } else {
-            let balance = Self::get_vault_balance(env, tournament_id);
+            let balance = Self::get_vault_balance(env, tournament_id).unwrap_or(0);
             (balance * (bps as i128)) / 10_000
         }
     }
 
     /// Checks whether an asset address is explicitly whitelisted or authorized for prize pool deposits.
-    pub fn check_is_asset_whitelisted_or_xlm(env: Env, asset: Address) -> bool {
+    pub fn check_asset_whitelisted_or_xlm(env: Env, asset: Address) -> bool {
         Self::is_asset_whitelisted(env, asset)
     }
 

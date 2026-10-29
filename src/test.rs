@@ -2092,3 +2092,145 @@ fn test_batch2_sponsorship_admin_and_payout_queries() {
     let refunded = client.claim_sponsor_refund(&sponsor1, &cancelled_tourn_id);
     assert_eq!(refunded, 3_000_000);
 }
+
+#[test]
+fn test_batch3_badges_governance_and_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // 1. Two-step admin transfer
+    let proposed_admin = Address::generate(&env);
+    client.propose_admin_transfer(&admin, &proposed_admin);
+    assert_eq!(client.get_proposed_admin(), Some(proposed_admin.clone()));
+
+    // Cancel transfer
+    client.cancel_admin_transfer(&admin);
+    assert_eq!(client.get_proposed_admin(), None);
+
+    // Re-propose and accept
+    client.propose_admin_transfer(&admin, &proposed_admin);
+    client.accept_admin_transfer(&proposed_admin);
+    assert_eq!(client.get_admin(), proposed_admin);
+    assert_eq!(client.get_proposed_admin(), None);
+
+    // 2. Soulbound Achievement Badges (SBT)
+    let player1 = Address::generate(&env);
+    let badge = client.award_champion_badge(
+        &proposed_admin,
+        &player1,
+        &401,
+        &BadgeType::TournamentChampion,
+    );
+    assert_eq!(badge.badge_id, 1);
+    assert_eq!(badge.player, player1);
+    assert_eq!(badge.tournament_id, 401);
+    assert_eq!(badge.badge_type, BadgeType::TournamentChampion);
+
+    let badges = client.get_player_badges(&player1);
+    assert_eq!(badges.len(), 1);
+    assert_eq!(client.get_player_badge_count(&player1), 1);
+    assert_eq!(
+        client.has_player_badge(&player1, &401, &BadgeType::TournamentChampion),
+        true
+    );
+    assert_eq!(
+        client.has_player_badge(&player1, &401, &BadgeType::RunnerUp),
+        false
+    );
+
+    // 3. Tournament setup & Banner URI & Creator Royalty
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let tournament_id: u64 = 401;
+    let prize_amount: i128 = 25_000_000;
+    token_asset.mint(&funder, &prize_amount);
+
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Batch 3 Arena Masters"),
+        game_id: String::from_str(&env, "splash-rush-b3"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 8,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+
+    // Banner URI
+    let banner = String::from_str(&env, "ipfs://QmStellarSplashBannerHash");
+    client.set_tournament_banner_uri(&creator, &tournament_id, &banner);
+    assert_eq!(
+        client.get_tournament_banner_uri(&tournament_id),
+        Some(banner)
+    );
+
+    // Creator Royalty
+    client.set_creator_royalty_bps(&creator, &tournament_id, &300); // 3.00%
+    assert_eq!(client.get_creator_royalty_bps(&tournament_id), 300);
+
+    // Fund and open
+    client.fund_prize_pool(&funder, &tournament_id, &prize_amount);
+    client.open_tournament(&creator, &tournament_id);
+    client.register_participant(&player1, &tournament_id);
+
+    // Check royalty calculation on funded vault (3% of 25M = 750k)
+    let royalty = client.calculate_creator_royalty(&tournament_id);
+    assert_eq!(royalty, 750_000);
+
+    // Asset whitelist query
+    client.set_asset_whitelisted(&token_client.address, &true);
+    assert_eq!(
+        client.check_asset_whitelisted_or_xlm(&token_client.address),
+        true
+    );
+
+    // Lifecycle status helpers
+    assert_eq!(client.is_tournament_in_progress(&tournament_id), false);
+    client.start_tournament(&creator, &tournament_id);
+    assert_eq!(client.is_tournament_in_progress(&tournament_id), true);
+
+    env.ledger().set_timestamp(2001);
+    assert_eq!(client.is_tournament_completed(&tournament_id), false);
+    client.complete_tournament(&creator, &tournament_id);
+    assert_eq!(client.is_tournament_completed(&tournament_id), true);
+    assert_eq!(client.is_tournament_cancelled(&tournament_id), false);
+
+    // Dispute helpers
+    client.open_dispute_window(&creator, &tournament_id, &300);
+    assert_eq!(client.get_dispute_reason_code(&tournament_id), 0);
+    assert_eq!(client.get_dispute_challenger(&tournament_id), None);
+
+    client.submit_dispute(&player1, &tournament_id, &42);
+    assert_eq!(client.get_dispute_reason_code(&tournament_id), 42);
+    assert_eq!(
+        client.get_dispute_challenger(&tournament_id),
+        Some(player1)
+    );
+
+    // Cancelled tournament check
+    let cancel_id: u64 = 402;
+    let cancel_config = TournamentConfig {
+        tournament_id: cancel_id,
+        title: String::from_str(&env, "Cancelled State Test"),
+        game_id: String::from_str(&env, "splash-rush-b3"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 8,
+        start_time: 5000,
+        end_time: 6000,
+    };
+    client.create_tournament(&creator, &cancel_config);
+    client.cancel_tournament(&creator, &cancel_id);
+    assert_eq!(client.is_tournament_cancelled(&cancel_id), true);
+}
