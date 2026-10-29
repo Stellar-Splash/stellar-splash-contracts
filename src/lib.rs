@@ -2509,6 +2509,13 @@ impl TournamentVaultContract {
         env.storage().persistent().has(&part_key)
     }
 
+    /// Returns the tournament vault funder address if funded, or None.
+    pub fn get_tournament_funder_opt(env: Env, tournament_id: u64) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VaultFunder(tournament_id))
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
