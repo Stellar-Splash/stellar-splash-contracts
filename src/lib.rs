@@ -1701,6 +1701,30 @@ impl TournamentVaultContract {
             None => true,
         }
     }
+
+    /// Upgrades the contract's executable WASM bytecode (admin only).
+    pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        env.events().publish(
+            (symbol_short!("contract"), symbol_short!("upgrade")),
+            (admin, new_wasm_hash.clone()),
+        );
+
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        env.storage()
+            .instance()
+            .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
