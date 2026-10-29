@@ -3230,6 +3230,22 @@ impl TournamentVaultContract {
         Self::get_player_badges(env, player).len()
     }
 
+    /// Checks whether a player holds a specific badge type for a designated tournament.
+    pub fn has_player_badge(
+        env: Env,
+        player: Address,
+        tournament_id: u64,
+        badge_type: BadgeType,
+    ) -> bool {
+        let badges = Self::get_player_badges(env, player);
+        for b in badges.iter() {
+            if b.tournament_id == tournament_id && b.badge_type == badge_type {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
