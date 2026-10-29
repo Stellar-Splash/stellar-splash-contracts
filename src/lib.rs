@@ -2553,6 +2553,24 @@ impl TournamentVaultContract {
         disputed
     }
 
+    /// Returns the number of seconds remaining until tournament gameplay concludes, or 0 if concluded.
+    pub fn get_tournament_time_remaining(env: Env, tournament_id: u64) -> u64 {
+        if let Some(t) = env
+            .storage()
+            .persistent()
+            .get::<_, TournamentInfo>(&DataKey::Tournament(tournament_id))
+        {
+            let now = env.ledger().timestamp();
+            if now < t.end_time {
+                t.end_time - now
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
