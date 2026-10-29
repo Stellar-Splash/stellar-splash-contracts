@@ -2956,6 +2956,14 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Returns the active system-wide maximum participant cap per tournament.
+    pub fn get_max_participants_limit(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxParticipantsLimit)
+            .unwrap_or(MAX_PARTICIPANTS_LIMIT)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
