@@ -250,6 +250,15 @@ pub struct EntryFeeConfig {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlayerStatsRecord {
+    pub player: Address,
+    pub tournaments_joined: u32,
+    pub tournaments_won: u32,
+    pub total_score: u64,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -277,6 +286,7 @@ enum DataKey {
     EntryFee(u64),
     TotalEntryFees(u64),
     PlayerEntryFeePaid(u64, Address),
+    PlayerStats(Address),
 }
 
 #[contract]
@@ -785,6 +795,28 @@ impl TournamentVaultContract {
         }
 
         env.storage().persistent().set(&part_key, &true);
+
+        let stats_key = DataKey::PlayerStats(player.clone());
+        let mut stats: PlayerStatsRecord =
+            env.storage()
+                .persistent()
+                .get(&stats_key)
+                .unwrap_or(PlayerStatsRecord {
+                    player: player.clone(),
+                    tournaments_joined: 0,
+                    tournaments_won: 0,
+                    total_score: 0,
+                });
+        stats.tournaments_joined = stats
+            .tournaments_joined
+            .checked_add(1)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage().persistent().set(&stats_key, &stats);
+        env.storage().persistent().extend_ttl(
+            &stats_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
 
         let mut part_list: Vec<Address> = env
             .storage()
