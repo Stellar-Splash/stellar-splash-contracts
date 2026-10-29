@@ -2516,6 +2516,14 @@ impl TournamentVaultContract {
             .get(&DataKey::VaultFunder(tournament_id))
     }
 
+    /// Calculates the deterministic integer payout share for a prize pool given basis points (100 bps = 1.00%).
+    pub fn calculate_payout_share(_env: Env, total_amount: i128, bps: u32) -> i128 {
+        if total_amount <= 0 || bps == 0 {
+            return 0;
+        }
+        (total_amount * (bps as i128)) / 10_000
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
