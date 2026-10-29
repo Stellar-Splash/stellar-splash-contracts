@@ -1348,3 +1348,80 @@ fn test_entry_fee_lifecycle() {
         prize_amount + entry_fee_amount * 2
     );
 }
+
+#[test]
+fn test_player_stats_and_active_tournaments() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let player = Address::generate(&env);
+
+    // Initial stats should be zeroed
+    let init_stats = client.get_player_stats(&player);
+    assert_eq!(init_stats.tournaments_joined, 0);
+    assert_eq!(init_stats.tournaments_won, 0);
+
+    let prize_amount: i128 = 20_000_000;
+    token_asset.mint(&funder, &(prize_amount * 2));
+
+    let t1_id: u64 = 501;
+    let config1 = TournamentConfig {
+        tournament_id: t1_id,
+        title: String::from_str(&env, "Tournament Alpha"),
+        game_id: String::from_str(&env, "splash-rush"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+    client.create_tournament(&creator, &config1);
+    client.fund_prize_pool(&funder, &t1_id, &prize_amount);
+    client.open_tournament(&creator, &t1_id);
+
+    let t2_id: u64 = 502;
+    let config2 = TournamentConfig {
+        tournament_id: t2_id,
+        title: String::from_str(&env, "Tournament Beta"),
+        game_id: String::from_str(&env, "splash-rush"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+    client.create_tournament(&creator, &config2);
+
+    let active_tournaments = client.get_active_tournaments();
+    assert_eq!(active_tournaments.contains(t1_id), true);
+    assert_eq!(active_tournaments.contains(t2_id), true);
+
+    // Register participant and verify tournaments_joined increment
+    client.register_participant(&player, &t1_id);
+    let joined_stats = client.get_player_stats(&player);
+    assert_eq!(joined_stats.tournaments_joined, 1);
+    assert_eq!(joined_stats.tournaments_won, 0);
+
+    // Non-admin cannot increment wins
+    assert_eq!(
+        client.try_increment_player_wins(&non_admin, &player),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // Admin records tournament victory
+    client.increment_player_wins(&admin, &player);
+    let won_stats = client.get_player_stats(&player);
+    assert_eq!(won_stats.tournaments_won, 1);
+}
