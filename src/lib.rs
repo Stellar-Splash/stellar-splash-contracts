@@ -45,6 +45,7 @@ pub enum Error {
     InvalidTreasuryFeeBps = 34,
     TournamentDurationTooShort = 35,
     InvalidMaxParticipants = 36,
+    AssetNotWhitelisted = 37,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
@@ -245,6 +246,7 @@ enum DataKey {
     TreasuryFeeBps,
     TotalSettledAmount,
     TournamentMetadataUri(u64),
+    WhitelistedAsset(Address),
 }
 
 #[contract]
@@ -380,6 +382,41 @@ impl TournamentVaultContract {
     /// Retrieve the configured protocol treasury fee in basis points.
     pub fn get_treasury_fee_bps(env: Env) -> u32 {
         env.storage().instance().get(&DataKey::TreasuryFeeBps).unwrap_or(0)
+    }
+
+    /// Whitelists or de-whitelists an asset for tournament prize pools (admin only).
+    pub fn set_asset_whitelisted(
+        env: Env,
+        asset: Address,
+        whitelisted: bool,
+    ) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+
+        let key = DataKey::WhitelistedAsset(asset.clone());
+        if whitelisted {
+            env.storage().instance().set(&key, &true);
+        } else {
+            env.storage().instance().remove(&key);
+        }
+
+        env.events().publish(
+            (symbol_short!("asset"), symbol_short!("wlist")),
+            (asset, whitelisted),
+        );
+        Ok(())
+    }
+
+    /// Checks if a prize asset is whitelisted by the protocol admin.
+    pub fn is_asset_whitelisted(env: Env, asset: Address) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::WhitelistedAsset(asset))
+            .unwrap_or(false)
     }
 
     /// Create a new tournament record.
