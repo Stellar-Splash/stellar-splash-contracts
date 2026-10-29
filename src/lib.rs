@@ -2127,6 +2127,20 @@ impl TournamentVaultContract {
 
         Ok(())
     }
+
+    /// Retrieves on-chain career statistics for a player address.
+    pub fn get_player_stats(env: Env, player: Address) -> PlayerStatsRecord {
+        let stats_key = DataKey::PlayerStats(player.clone());
+        env.storage()
+            .persistent()
+            .get(&stats_key)
+            .unwrap_or(PlayerStatsRecord {
+                player,
+                tournaments_joined: 0,
+                tournaments_won: 0,
+                total_score: 0,
+            })
+    }
 }
 
 #[cfg(test)]
