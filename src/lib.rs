@@ -2604,6 +2604,23 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the ledger timestamp when settlement was executed, if settled.
+    pub fn get_settlement_timestamp(env: Env, tournament_id: u64) -> Option<u64> {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, SettlementRecord>(&DataKey::Settlement(tournament_id))
+        {
+            if record.settled_at > 0 {
+                Some(record.settled_at)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
