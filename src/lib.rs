@@ -2581,6 +2581,16 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the creator address of the specified tournament.
+    pub fn get_tournament_creator(env: Env, tournament_id: u64) -> Result<Address, Error> {
+        let t: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Tournament(tournament_id))
+            .ok_or(Error::TournamentNotFound)?;
+        Ok(t.creator)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
