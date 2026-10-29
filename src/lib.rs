@@ -354,6 +354,11 @@ impl TournamentVaultContract {
         Ok(admin)
     }
 
+    /// Retrieve the contract deployer / root administrator address.
+    pub fn get_contract_deployer(env: Env) -> Result<Address, Error> {
+        Self::get_admin(env)
+    }
+
     /// Explicitly extends instance storage TTL for contract metadata and admin records.
     pub fn extend_contract_instance_ttl(env: Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Admin) {
