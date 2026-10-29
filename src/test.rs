@@ -1622,3 +1622,96 @@ fn test_dispute_window_extension_and_settlement_queries() {
         Some(SettlementStatus::Settled)
     );
 }
+
+#[test]
+fn test_dispute_active_capacity_and_treasury_queries() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(2000);
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Verify contract deployer query matches admin
+    assert_eq!(client.get_contract_deployer(), admin);
+
+    let token_admin = Address::generate(&env);
+    let (_token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let player1 = Address::generate(&env);
+    let player2 = Address::generate(&env);
+
+    let prize_pool: i128 = 20_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id: u64 = 8801;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Capacity Test Cup"),
+        game_id: String::from_str(&env, "splash-b12"),
+        prize_asset: token_asset.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 2,
+        start_time: 2001,
+        end_time: 3000,
+    };
+
+    client.create_tournament(&creator, &config);
+
+    // Verify initial capacity info
+    let initial_cap = client.get_tournament_capacity_status(&tournament_id);
+    assert_eq!(initial_cap.current_participants, 0);
+    assert_eq!(initial_cap.max_participants, 2);
+    assert_eq!(initial_cap.is_full, false);
+
+    // Treasury fee query before treasury bps configured
+    assert_eq!(client.get_tournament_treasury_fee(&tournament_id), 0);
+
+    // Fund tournament
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+    client.open_tournament(&creator, &tournament_id);
+
+    // Configure protocol treasury with 500 bps (5.00%)
+    let treasury_addr = Address::generate(&env);
+    client.set_treasury(&treasury_addr, &500);
+
+    // Treasury fee query should now be 5% of 20_000_000 = 1_000_000
+    assert_eq!(
+        client.get_tournament_treasury_fee(&tournament_id),
+        1_000_000
+    );
+
+    // Register 1 player -> not full
+    client.register_participant(&player1, &tournament_id);
+    let cap_p1 = client.get_tournament_capacity_status(&tournament_id);
+    assert_eq!(cap_p1.current_participants, 1);
+    assert_eq!(cap_p1.is_full, false);
+
+    // Register 2nd player -> reaches max capacity (2/2)
+    client.register_participant(&player2, &tournament_id);
+    let cap_p2 = client.get_tournament_capacity_status(&tournament_id);
+    assert_eq!(cap_p2.current_participants, 2);
+    assert_eq!(cap_p2.is_full, true);
+
+    // Complete tournament & verify dispute activity query
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(3001);
+    client.complete_tournament(&creator, &tournament_id);
+
+    // Open dispute window for 300 seconds
+    client.open_dispute_window(&creator, &tournament_id, &300);
+    assert_eq!(client.is_dispute_active(&tournament_id), false);
+
+    // Submit dispute -> dispute becomes active
+    client.submit_dispute(&player1, &tournament_id, &1);
+    assert_eq!(client.is_dispute_active(&tournament_id), true);
+
+    // Resolve dispute by admin -> dispute is no longer active
+    client.resolve_dispute(&admin, &tournament_id);
+    assert_eq!(client.is_dispute_active(&tournament_id), false);
+}
