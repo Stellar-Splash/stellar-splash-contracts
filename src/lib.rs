@@ -234,12 +234,22 @@ pub struct SettlementRecord {
 }
 
 #[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum DisputeStatus {
+    Active = 0,
+    Resolved = 1,
+    Dismissed = 2,
+}
+
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeRecord {
     pub tournament_id: u64,
     pub challenger: Address,
     pub reason_code: u32,
     pub submitted_at: u64,
+    pub status: DisputeStatus,
 }
 
 #[contracttype]
@@ -288,6 +298,7 @@ enum DataKey {
     PlayerEntryFeePaid(u64, Address),
     PlayerStats(Address),
     TournamentIdList,
+    TournamentDispute(u64),
 }
 
 #[contract]
@@ -1840,14 +1851,23 @@ impl TournamentVaultContract {
             challenger: challenger.clone(),
             reason_code,
             submitted_at: env.ledger().timestamp(),
+            status: DisputeStatus::Active,
         };
 
         env.storage().persistent().set(&dispute_key, &record);
         env.storage()
             .persistent()
+            .set(&DataKey::TournamentDispute(tournament_id), &record);
+        env.storage()
+            .persistent()
             .set(&DataKey::TournamentDisputedFlag(tournament_id), &true);
         env.storage().persistent().extend_ttl(
             &dispute_key,
+            STORAGE_BUMP_THRESHOLD,
+            STORAGE_LIFETIME_BUMP,
+        );
+        env.storage().persistent().extend_ttl(
+            &DataKey::TournamentDispute(tournament_id),
             STORAGE_BUMP_THRESHOLD,
             STORAGE_LIFETIME_BUMP,
         );
@@ -1883,6 +1903,16 @@ impl TournamentVaultContract {
         env.storage()
             .persistent()
             .set(&DataKey::TournamentDisputedFlag(tournament_id), &false);
+
+        let t_dispute_key = DataKey::TournamentDispute(tournament_id);
+        if let Some(mut dispute) = env
+            .storage()
+            .persistent()
+            .get::<_, DisputeRecord>(&t_dispute_key)
+        {
+            dispute.status = DisputeStatus::Resolved;
+            env.storage().persistent().set(&t_dispute_key, &dispute);
+        }
 
         env.events().publish(
             (symbol_short!("dispute"), symbol_short!("reslvd")),
