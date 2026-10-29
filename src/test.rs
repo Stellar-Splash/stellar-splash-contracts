@@ -759,3 +759,16 @@ fn test_premature_completion_rejection() {
     env.ledger().set_timestamp(2000);
     client.complete_tournament(&creator, &tournament_id);
 }
+
+#[test]
+fn test_contract_metadata_descriptor() {
+    let env = Env::default();
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let meta = client.get_contract_metadata();
+    assert_eq!(meta.name, String::from_str(&env, "Stellar Splash Tournament Vault"));
+    assert_eq!(meta.version, String::from_str(&env, "1.0.0"));
+    assert_eq!(meta.protocol_version, 1);
+    assert_eq!(meta.min_prize_amount, 10_000_000);
+}

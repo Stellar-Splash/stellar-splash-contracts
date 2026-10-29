@@ -75,6 +75,16 @@ pub enum AgreementStatus {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractMetadata {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub protocol_version: u32,
+    pub min_prize_amount: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TournamentConfig {
     pub tournament_id: u64,
     pub title: String,
@@ -249,6 +259,20 @@ impl TournamentVaultContract {
             .instance()
             .extend_ttl(STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
         Ok(())
+    }
+
+    /// Query immutable contract metadata descriptor.
+    pub fn get_contract_metadata(env: Env) -> ContractMetadata {
+        ContractMetadata {
+            name: String::from_str(&env, "Stellar Splash Tournament Vault"),
+            version: String::from_str(&env, "1.0.0"),
+            description: String::from_str(
+                &env,
+                "Deterministic eSports escrow vault and settlement protocol on Soroban",
+            ),
+            protocol_version: 1,
+            min_prize_amount: MIN_PRIZE_AMOUNT,
+        }
     }
 
     /// Pause the contract operations (admin-only emergency control).
