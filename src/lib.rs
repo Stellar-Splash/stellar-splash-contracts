@@ -1750,6 +1750,20 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the disbursed prize amount for a settled tournament (0 if not settled).
+    pub fn get_settled_amount(env: Env, tournament_id: u64) -> i128 {
+        match Self::get_settlement(env, tournament_id) {
+            Ok(s) => {
+                if s.status == SettlementStatus::Settled {
+                    s.total_amount
+                } else {
+                    0
+                }
+            }
+            Err(_) => 0,
+        }
+    }
+
     /// Returns the cumulative prize amount settled across all tournaments in the vault.
     pub fn get_total_settled_amount(env: Env) -> i128 {
         env.storage()
