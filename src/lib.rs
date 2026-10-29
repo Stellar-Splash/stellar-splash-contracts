@@ -119,6 +119,19 @@ pub struct TournamentInfo {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TournamentDetails {
+    pub tournament_id: u64,
+    pub state: TournamentState,
+    pub target_prize_amount: i128,
+    pub current_funded_amount: i128,
+    pub current_participants: u32,
+    pub max_participants: u32,
+    pub start_time: u64,
+    pub end_time: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedResultInput {
     pub tournament_id: u64,
     pub match_id: String,
@@ -1172,6 +1185,29 @@ impl TournamentVaultContract {
             .get(&key)
             .ok_or(Error::TournamentNotFound)?;
         Ok(info.current_participants)
+    }
+
+    /// Retrieve summarized tournament status and operational parameters.
+    pub fn get_tournament_details(
+        env: Env,
+        tournament_id: u64,
+    ) -> Result<TournamentDetails, Error> {
+        let key = DataKey::Tournament(tournament_id);
+        let info: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::TournamentNotFound)?;
+        Ok(TournamentDetails {
+            tournament_id: info.tournament_id,
+            state: info.state,
+            target_prize_amount: info.target_prize_amount,
+            current_funded_amount: info.current_funded_amount,
+            current_participants: info.current_participants,
+            max_participants: info.max_participants,
+            start_time: info.start_time,
+            end_time: info.end_time,
+        })
     }
 
     /// View function returning immutable tournament configuration parameters.
