@@ -1837,6 +1837,12 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Verifies and returns the token balance held in this contract instance's vault.
+    pub fn get_contract_token_balance(env: Env, token_address: Address) -> i128 {
+        let token_client = token::Client::new(&env, &token_address);
+        token_client.balance(&env.current_contract_address())
+    }
+
     /// Upgrades the contract's executable WASM bytecode (admin only).
     pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
         let stored_admin: Address = env
