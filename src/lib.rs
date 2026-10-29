@@ -3425,6 +3425,15 @@ impl TournamentVaultContract {
         Self::is_asset_whitelisted(env, asset)
     }
 
+    /// Returns the recorded dispute reason code for a tournament, or 0 if no dispute was filed.
+    pub fn get_dispute_reason_code(env: Env, tournament_id: u64) -> u32 {
+        if let Some(record) = Self::get_dispute_status(env, tournament_id) {
+            record.reason_code
+        } else {
+            0
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
