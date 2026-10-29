@@ -2591,6 +2591,19 @@ impl TournamentVaultContract {
         Ok(t.creator)
     }
 
+    /// Returns true if the tournament scheduled end_time has passed according to the ledger timestamp.
+    pub fn is_tournament_expired(env: Env, tournament_id: u64) -> bool {
+        if let Some(t) = env
+            .storage()
+            .persistent()
+            .get::<_, TournamentInfo>(&DataKey::Tournament(tournament_id))
+        {
+            env.ledger().timestamp() >= t.end_time
+        } else {
+            false
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
