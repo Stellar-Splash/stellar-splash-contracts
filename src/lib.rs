@@ -284,6 +284,16 @@ pub struct PlayerStatsRecord {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractStats {
+    pub total_tournaments: u64,
+    pub total_settled_amount: i128,
+    pub total_volume: i128,
+    pub is_paused: bool,
+    pub treasury_fee_bps: u32,
+}
+
+#[contracttype]
 #[derive(Clone)]
 enum DataKey {
     Admin,
@@ -2396,6 +2406,43 @@ impl TournamentVaultContract {
         env.storage()
             .persistent()
             .get(&DataKey::TournamentDispute(tournament_id))
+    }
+
+    /// Returns global aggregated statistics and contract state parameters.
+    pub fn get_contract_stats(env: Env) -> ContractStats {
+        let total_tournaments = env
+            .storage()
+            .instance()
+            .get(&DataKey::TournamentCount)
+            .unwrap_or(0u64);
+        let total_settled_amount = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSettledAmount)
+            .unwrap_or(0i128);
+        let total_volume = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalVolume)
+            .unwrap_or(0i128);
+        let is_paused = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        let treasury_fee_bps = env
+            .storage()
+            .instance()
+            .get(&DataKey::TreasuryFeeBps)
+            .unwrap_or(0u32);
+
+        ContractStats {
+            total_tournaments,
+            total_settled_amount,
+            total_volume,
+            is_paused,
+            treasury_fee_bps,
+        }
     }
 
     /// Returns the active contract/protocol version (Protocol 21).
