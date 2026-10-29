@@ -2013,6 +2013,28 @@ impl TournamentVaultContract {
 
         Ok(())
     }
+
+    /// Retrieves the entry fee configuration (fee asset and amount) for a tournament.
+    pub fn get_entry_fee(env: Env, tournament_id: u64) -> Result<EntryFeeConfig, Error> {
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let fee_key = DataKey::EntryFee(tournament_id);
+        let entry_fee = env
+            .storage()
+            .persistent()
+            .get::<_, EntryFeeConfig>(&fee_key)
+            .unwrap_or(EntryFeeConfig {
+                fee_asset: tournament.prize_asset,
+                fee_amount: 0,
+            });
+
+        Ok(entry_fee)
+    }
 }
 
 #[cfg(test)]
