@@ -233,7 +233,10 @@ fn test_prize_agreement_lifecycle_and_immutability() {
     let unauth_lock = client.try_lock_prize_agreement(&impostor, &tournament_id, &1);
     assert!(unauth_lock.is_err());
 
-    assert_eq!(client.get_agreement_status(&tournament_id, &1), AgreementStatus::Locked);
+    assert_eq!(
+        client.get_agreement_status(&tournament_id, &1),
+        AgreementStatus::Locked
+    );
     assert_eq!(client.get_active_agreement_version(&tournament_id), 1);
 
     // 6. Test supersede transition on revision
@@ -252,12 +255,21 @@ fn test_prize_agreement_lifecycle_and_immutability() {
     let hash_v1 = BytesN::from_array(&env, &[1u8; 32]);
     let hash_v2 = BytesN::from_array(&env, &[2u8; 32]);
     client.register_prize_agreement(&creator, &tourn_id_2, &1, &hash_v1);
-    assert_eq!(client.get_agreement_status(&tourn_id_2, &1), AgreementStatus::PendingApproval);
+    assert_eq!(
+        client.get_agreement_status(&tourn_id_2, &1),
+        AgreementStatus::PendingApproval
+    );
     assert_eq!(client.get_active_agreement_version(&tourn_id_2), 1);
 
     client.register_prize_agreement(&creator, &tourn_id_2, &2, &hash_v2);
-    assert_eq!(client.get_agreement_status(&tourn_id_2, &1), AgreementStatus::Superseded);
-    assert_eq!(client.get_agreement_status(&tourn_id_2, &2), AgreementStatus::PendingApproval);
+    assert_eq!(
+        client.get_agreement_status(&tourn_id_2, &1),
+        AgreementStatus::Superseded
+    );
+    assert_eq!(
+        client.get_agreement_status(&tourn_id_2, &2),
+        AgreementStatus::PendingApproval
+    );
     assert_eq!(client.get_active_agreement_version(&tourn_id_2), 2);
 }
 
@@ -768,7 +780,10 @@ fn test_contract_metadata_descriptor() {
     let client = TournamentVaultContractClient::new(&env, &contract_id);
 
     let meta = client.get_contract_metadata();
-    assert_eq!(meta.name, String::from_str(&env, "Stellar Splash Tournament Vault"));
+    assert_eq!(
+        meta.name,
+        String::from_str(&env, "Stellar Splash Tournament Vault")
+    );
     assert_eq!(meta.version, String::from_str(&env, "1.0.0"));
     assert_eq!(meta.protocol_version, 1);
     assert_eq!(meta.min_prize_amount, 10_000_000);
@@ -1007,9 +1022,15 @@ fn test_metadata_uri_participant_bounds_and_dispute_window() {
     // Initial metadata URI is None
     assert_eq!(client.get_tournament_metadata_uri(&tournament_id), None);
 
-    let ipfs_uri = String::from_str(&env, "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    let ipfs_uri = String::from_str(
+        &env,
+        "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    );
     client.set_tournament_metadata_uri(&creator, &tournament_id, &ipfs_uri);
-    assert_eq!(client.get_tournament_metadata_uri(&tournament_id), Some(ipfs_uri));
+    assert_eq!(
+        client.get_tournament_metadata_uri(&tournament_id),
+        Some(ipfs_uri)
+    );
 
     // Progress through funding, opening, completion
     client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
@@ -1073,5 +1094,3 @@ fn test_metadata_uri_participant_bounds_and_dispute_window() {
     assert_eq!(settled.status, SettlementStatus::Settled);
     assert_eq!(token_client.balance(&winner), prize_pool);
 }
-
-

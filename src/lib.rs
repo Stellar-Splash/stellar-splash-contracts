@@ -352,11 +352,7 @@ impl TournamentVaultContract {
     }
 
     /// Configure protocol treasury address and optional basis-point fee (admin only).
-    pub fn set_treasury(
-        env: Env,
-        treasury: Address,
-        fee_bps: u32,
-    ) -> Result<(), Error> {
+    pub fn set_treasury(env: Env, treasury: Address, fee_bps: u32) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
@@ -368,8 +364,12 @@ impl TournamentVaultContract {
             return Err(Error::InvalidTreasuryFeeBps);
         }
 
-        env.storage().instance().set(&DataKey::TreasuryAddress, &treasury);
-        env.storage().instance().set(&DataKey::TreasuryFeeBps, &fee_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::TreasuryAddress, &treasury);
+        env.storage()
+            .instance()
+            .set(&DataKey::TreasuryFeeBps, &fee_bps);
 
         env.events().publish(
             (symbol_short!("treasury"), symbol_short!("set")),
@@ -385,15 +385,14 @@ impl TournamentVaultContract {
 
     /// Retrieve the configured protocol treasury fee in basis points.
     pub fn get_treasury_fee_bps(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::TreasuryFeeBps).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::TreasuryFeeBps)
+            .unwrap_or(0)
     }
 
     /// Whitelists or de-whitelists an asset for tournament prize pools (admin only).
-    pub fn set_asset_whitelisted(
-        env: Env,
-        asset: Address,
-        whitelisted: bool,
-    ) -> Result<(), Error> {
+    pub fn set_asset_whitelisted(env: Env, asset: Address, whitelisted: bool) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
@@ -560,9 +559,11 @@ impl TournamentVaultContract {
         let funder_key = DataKey::VaultFunder(tournament_id);
         if !env.storage().persistent().has(&funder_key) {
             env.storage().persistent().set(&funder_key, &funder);
-            env.storage()
-                .persistent()
-                .extend_ttl(&funder_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+            env.storage().persistent().extend_ttl(
+                &funder_key,
+                STORAGE_BUMP_THRESHOLD,
+                STORAGE_LIFETIME_BUMP,
+            );
         }
 
         env.storage().persistent().set(&key, &tournament);
@@ -645,9 +646,11 @@ impl TournamentVaultContract {
         let funder_key = DataKey::VaultFunder(tournament_id);
         if !env.storage().persistent().has(&funder_key) {
             env.storage().persistent().set(&funder_key, &funder);
-            env.storage()
-                .persistent()
-                .extend_ttl(&funder_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+            env.storage().persistent().extend_ttl(
+                &funder_key,
+                STORAGE_BUMP_THRESHOLD,
+                STORAGE_LIFETIME_BUMP,
+            );
         }
 
         env.storage().persistent().set(&key, &tournament);
@@ -836,7 +839,11 @@ impl TournamentVaultContract {
         let capacity_reached = tournament.max_participants > 0
             && tournament.current_participants >= tournament.max_participants;
 
-        if !is_admin && tournament.end_time > 0 && current_time < tournament.end_time && !capacity_reached {
+        if !is_admin
+            && tournament.end_time > 0
+            && current_time < tournament.end_time
+            && !capacity_reached
+        {
             return Err(Error::TournamentNotEnded);
         }
 
@@ -896,11 +903,7 @@ impl TournamentVaultContract {
     }
 
     /// Claim refund for a cancelled tournament.
-    pub fn claim_refund(
-        env: Env,
-        funder: Address,
-        tournament_id: u64,
-    ) -> Result<i128, Error> {
+    pub fn claim_refund(env: Env, funder: Address, tournament_id: u64) -> Result<i128, Error> {
         funder.require_auth();
 
         let key = DataKey::Tournament(tournament_id);
@@ -1207,10 +1210,7 @@ impl TournamentVaultContract {
     }
 
     /// Retrieve the currently active agreement version for a tournament.
-    pub fn get_active_agreement_version(
-        env: Env,
-        tournament_id: u64,
-    ) -> Result<u32, Error> {
+    pub fn get_active_agreement_version(env: Env, tournament_id: u64) -> Result<u32, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::ActiveAgreementVersion(tournament_id))
@@ -1311,10 +1311,7 @@ impl TournamentVaultContract {
     }
 
     /// View function returning immutable tournament configuration parameters.
-    pub fn get_tournament_config(
-        env: Env,
-        tournament_id: u64,
-    ) -> Result<TournamentConfig, Error> {
+    pub fn get_tournament_config(env: Env, tournament_id: u64) -> Result<TournamentConfig, Error> {
         let key = DataKey::Tournament(tournament_id);
         let info: TournamentInfo = env
             .storage()
