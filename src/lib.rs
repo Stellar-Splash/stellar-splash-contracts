@@ -254,6 +254,13 @@ pub struct DisputeRecord {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeWindowInfo {
+    pub end_timestamp: u64,
+    pub is_elapsed: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EntryFeeConfig {
     pub fee_asset: Address,
     pub fee_amount: i128,
@@ -1819,6 +1826,19 @@ impl TournamentVaultContract {
             Some(end_ts) => env.ledger().timestamp() >= end_ts,
             None => true,
         }
+    }
+
+    /// Returns structured dispute window info (end_timestamp, is_elapsed) if configured.
+    pub fn get_tournament_dispute_window(
+        env: Env,
+        tournament_id: u64,
+    ) -> Option<DisputeWindowInfo> {
+        let end_ts = Self::get_dispute_window_end(env.clone(), tournament_id)?;
+        let is_elapsed = env.ledger().timestamp() >= end_ts;
+        Some(DisputeWindowInfo {
+            end_timestamp: end_ts,
+            is_elapsed,
+        })
     }
 
     /// Submits a formal on-chain dispute challenge during an active dispute window.
