@@ -1094,3 +1094,171 @@ fn test_metadata_uri_participant_bounds_and_dispute_window() {
     assert_eq!(settled.status, SettlementStatus::Settled);
     assert_eq!(token_client.balance(&winner), prize_pool);
 }
+
+#[test]
+fn test_total_volume_and_vault_balance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+
+    assert_eq!(client.get_total_volume(), 0);
+    assert_eq!(client.get_contract_token_balance(&token_client.address), 0);
+
+    let prize_pool: i128 = 50_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id = 501;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Volume Tracking Cup"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+
+    // Verify TotalVolume and VaultBalance
+    assert_eq!(client.get_total_volume(), prize_pool);
+    assert_eq!(
+        client.get_contract_token_balance(&token_client.address),
+        prize_pool
+    );
+}
+
+#[test]
+fn test_dispute_submission_and_resolution() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let challenger = Address::generate(&env);
+    let winner = Address::generate(&env);
+
+    let prize_pool: i128 = 30_000_000;
+    token_asset.mint(&funder, &prize_pool);
+
+    let tournament_id = 601;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Dispute Resolution Cup"),
+        game_id: String::from_str(&env, "splash-rush-v1"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_pool,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize_pool);
+    client.open_tournament(&creator, &tournament_id);
+    client.start_tournament(&creator, &tournament_id);
+    env.ledger().set_timestamp(2001);
+    client.complete_tournament(&creator, &tournament_id);
+
+    let ranking_hash = BytesN::from_array(&env, &[0xaa; 32]);
+    client.record_ranking_hash(&creator, &tournament_id, &1, &ranking_hash);
+
+    let agreement_hash = BytesN::from_array(&env, &[0xbb; 32]);
+    client.register_prize_agreement(&creator, &tournament_id, &1, &agreement_hash);
+    client.lock_prize_agreement(&creator, &tournament_id, &1);
+
+    let mut allocations = soroban_sdk::Vec::new(&env);
+    allocations.push_back(RecipientAllocation {
+        recipient: winner.clone(),
+        rank: 1,
+        amount: prize_pool,
+    });
+
+    let settlement_hash = BytesN::from_array(&env, &[0xcc; 32]);
+    let input = SettlementInput {
+        tournament_id,
+        agreement_version: 1,
+        agreement_hash,
+        ranking_version: 1,
+        ranking_hash,
+        settlement_hash,
+        allocations,
+    };
+    client.authorize_settlement(&creator, &input);
+
+    // Open dispute window of 400s (ends at 2401)
+    client.open_dispute_window(&creator, &tournament_id, &400);
+
+    // Submit dispute within dispute window
+    assert_eq!(client.is_tournament_disputed(&tournament_id), false);
+    let dispute = client.submit_dispute(&challenger, &tournament_id, &101);
+    assert_eq!(dispute.reason_code, 101);
+    assert_eq!(client.is_tournament_disputed(&tournament_id), true);
+
+    // Duplicate dispute from same challenger rejected
+    assert_eq!(
+        client.try_submit_dispute(&challenger, &tournament_id, &101),
+        Err(Ok(Error::DisputeAlreadySubmitted))
+    );
+
+    // Fast-forward past dispute window timestamp (2405)
+    env.ledger().set_timestamp(2405);
+    assert_eq!(client.is_dispute_window_elapsed(&tournament_id), true);
+
+    // Non-admin attempting settlement while tournament is disputed is rejected
+    assert_eq!(
+        client.try_execute_settlement(&creator, &tournament_id),
+        Err(Ok(Error::TournamentDisputed))
+    );
+
+    // Admin resolves dispute
+    client.resolve_dispute(&admin, &tournament_id);
+    assert_eq!(client.is_tournament_disputed(&tournament_id), false);
+
+    // Settlement now executes successfully
+    let settled = client.execute_settlement(&creator, &tournament_id);
+    assert_eq!(settled.status, SettlementStatus::Settled);
+}
+
+#[test]
+fn test_upgrade_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let dummy_hash = BytesN::from_array(&env, &[0x99; 32]);
+
+    // Non-admin call fails
+    assert_eq!(
+        client.try_upgrade(&non_admin, &dummy_hash),
+        Err(Ok(Error::Unauthorized))
+    );
+}
