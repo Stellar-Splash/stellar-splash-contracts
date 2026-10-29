@@ -3369,6 +3369,40 @@ impl TournamentVaultContract {
         env.storage().persistent().get(&uri_key)
     }
 
+    /// Allows the tournament creator to configure the creator royalty fee in basis points (max 500 bps = 5.00%).
+    pub fn set_creator_royalty_bps(
+        env: Env,
+        creator: Address,
+        tournament_id: u64,
+        royalty_bps: u32,
+    ) -> Result<(), Error> {
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != creator {
+            return Err(Error::Unauthorized);
+        }
+        creator.require_auth();
+
+        if royalty_bps > 500 {
+            return Err(Error::InvalidRoyaltyBps);
+        }
+
+        let roy_key = DataKey::CreatorRoyaltyBps(tournament_id);
+        env.storage().persistent().set(&roy_key, &royalty_bps);
+
+        env.events().publish(
+            (symbol_short!("tourn"), symbol_short!("royalty")),
+            (tournament_id, royalty_bps),
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
