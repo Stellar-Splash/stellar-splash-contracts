@@ -3403,6 +3403,12 @@ impl TournamentVaultContract {
         Ok(())
     }
 
+    /// Returns the configured creator royalty basis points for a tournament, or 0.
+    pub fn get_creator_royalty_bps(env: Env, tournament_id: u64) -> u32 {
+        let roy_key = DataKey::CreatorRoyaltyBps(tournament_id);
+        env.storage().persistent().get(&roy_key).unwrap_or(0)
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
