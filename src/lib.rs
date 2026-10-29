@@ -2524,6 +2524,18 @@ impl TournamentVaultContract {
         (total_amount * (bps as i128)) / 10_000
     }
 
+    /// Validates whether a vector of basis points values sums to exactly 10,000 bps (100.00%).
+    pub fn validate_basis_points_sum(_env: Env, bps_list: Vec<u32>) -> bool {
+        let mut total: u32 = 0;
+        for bps in bps_list.iter() {
+            total = match total.checked_add(bps) {
+                Some(sum) => sum,
+                None => return false,
+            };
+        }
+        total == 10_000
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
