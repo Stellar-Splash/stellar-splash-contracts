@@ -1764,6 +1764,18 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Returns the settlement status for a tournament, or None if no settlement was created.
+    pub fn get_tournament_settlement_status(
+        env: Env,
+        tournament_id: u64,
+    ) -> Option<SettlementStatus> {
+        let record = env
+            .storage()
+            .persistent()
+            .get::<_, SettlementRecord>(&DataKey::Settlement(tournament_id))?;
+        Some(record.status)
+    }
+
     /// Returns the cumulative prize amount settled across all tournaments in the vault.
     pub fn get_total_settled_amount(env: Env) -> i128 {
         env.storage()
