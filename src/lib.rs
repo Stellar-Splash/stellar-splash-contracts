@@ -3048,6 +3048,23 @@ impl TournamentVaultContract {
         list.get(index)
     }
 
+    /// Returns true if the player address is recorded as a winning recipient in the tournament settlement.
+    pub fn check_player_is_winner(env: Env, tournament_id: u64, player: Address) -> bool {
+        let alloc_key = DataKey::SettlementAllocations(tournament_id);
+        if let Some(allocations) = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<RecipientAllocation>>(&alloc_key)
+        {
+            for a in allocations.iter() {
+                if a.recipient == player && a.amount > 0 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
