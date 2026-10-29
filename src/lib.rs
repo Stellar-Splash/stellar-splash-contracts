@@ -46,6 +46,7 @@ pub enum Error {
     TournamentDurationTooShort = 35,
     InvalidMaxParticipants = 36,
     AssetNotWhitelisted = 37,
+    DisputeWindowNotElapsed = 38,
 }
 
 /// Maximum permissible byte length for title and game_id strings (storage safety limit)
@@ -54,6 +55,8 @@ pub const MAX_STRING_LENGTH: u32 = 128;
 pub const MAX_TREASURY_FEE_BPS: u32 = 1_000;
 /// Minimum allowable tournament duration in seconds (60 seconds)
 pub const MIN_TOURNAMENT_DURATION: u64 = 60;
+/// Minimum allowable challenge / dispute window duration in seconds (300 seconds = 5 minutes)
+pub const MIN_DISPUTE_WINDOW_SECONDS: u64 = 300;
 /// Maximum permissible participant limit per tournament to protect storage scaling
 pub const MAX_PARTICIPANTS_LIMIT: u32 = 10_000;
 /// Ledger threshold (~1 day at 5 seconds per ledger)
@@ -247,6 +250,7 @@ enum DataKey {
     TotalSettledAmount,
     TournamentMetadataUri(u64),
     WhitelistedAsset(Address),
+    DisputeWindow(u64),
 }
 
 #[contract]
@@ -1537,6 +1541,13 @@ impl TournamentVaultContract {
             }
         }
 
+        if !Self::is_dispute_window_elapsed(env.clone(), tournament_id) {
+            let admin = Self::get_admin(env.clone())?;
+            if admin != caller {
+                return Err(Error::DisputeWindowNotElapsed);
+            }
+        }
+
         let settle_key = DataKey::Settlement(tournament_id);
         let mut record: SettlementRecord = env
             .storage()
@@ -1630,6 +1641,68 @@ impl TournamentVaultContract {
             .instance()
             .get(&DataKey::TotalSettledAmount)
             .unwrap_or(0i128)
+    }
+
+    /// Opens a time-locked dispute/challenge window for an authorized tournament (creator or admin only).
+    pub fn open_dispute_window(
+        env: Env,
+        caller: Address,
+        tournament_id: u64,
+        duration_seconds: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.creator != caller {
+            let admin = Self::get_admin(env.clone())?;
+            if admin != caller {
+                return Err(Error::Unauthorized);
+            }
+        }
+
+        if duration_seconds < MIN_DISPUTE_WINDOW_SECONDS {
+            return Err(Error::TournamentDurationTooShort);
+        }
+
+        let end_timestamp = env
+            .ledger()
+            .timestamp()
+            .checked_add(duration_seconds)
+            .ok_or(Error::ArithmeticOverflow)?;
+
+        let key = DataKey::DisputeWindow(tournament_id);
+        env.storage().persistent().set(&key, &end_timestamp);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("open")),
+            (tournament_id, end_timestamp),
+        );
+
+        Ok(end_timestamp)
+    }
+
+    /// Retrieves the dispute window end timestamp if configured.
+    pub fn get_dispute_window_end(env: Env, tournament_id: u64) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DisputeWindow(tournament_id))
+    }
+
+    /// Checks if the dispute window has elapsed (or if none was configured).
+    pub fn is_dispute_window_elapsed(env: Env, tournament_id: u64) -> bool {
+        match Self::get_dispute_window_end(env.clone(), tournament_id) {
+            Some(end_ts) => env.ledger().timestamp() >= end_ts,
+            None => true,
+        }
     }
 }
 
