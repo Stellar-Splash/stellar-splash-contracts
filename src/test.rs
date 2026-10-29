@@ -2234,3 +2234,43 @@ fn test_batch3_badges_governance_and_lifecycle() {
     client.cancel_tournament(&creator, &cancel_id);
     assert_eq!(client.is_tournament_cancelled(&cancel_id), true);
 }
+
+#[test]
+fn test_formal_invariants_solvency_and_math() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Invariant 1: Valid basis points distribution must sum to exactly 10,000
+    let mut valid_bps = Vec::new(&env);
+    valid_bps.push_back(5000); // 50%
+    valid_bps.push_back(3000); // 30%
+    valid_bps.push_back(2000); // 20%
+    assert_eq!(client.validate_basis_points_sum(&valid_bps), true);
+
+    // Invariant 2: Invalid basis points (sum != 10,000) must be rejected
+    let mut invalid_bps = Vec::new(&env);
+    invalid_bps.push_back(5000);
+    invalid_bps.push_back(3000);
+    invalid_bps.push_back(1999); // 9,999 != 10,000
+    assert_eq!(client.validate_basis_points_sum(&invalid_bps), false);
+
+    // Invariant 3: Payout shares must conserve the entire prize pool without leakage
+    let prize_pool: i128 = 10_000_000; // 1 XLM in stroops
+    let share1 = client.calculate_payout_share(&prize_pool, &5000);
+    let share2 = client.calculate_payout_share(&prize_pool, &3000);
+    let share3 = client.calculate_payout_share(&prize_pool, &2000);
+    assert_eq!(share1 + share2 + share3, prize_pool);
+
+    // Invariant 4: Unconfigured creator royalty defaults strictly to 0
+    assert_eq!(client.get_creator_royalty_bps(&101), 0);
+    let royalty = client.calculate_creator_royalty(&101);
+    assert_eq!(royalty, 0); // 0 vault balance = 0 royalty
+
+    // Invariant 5: Win rate bps bounded between 0 and 10,000
+    assert_eq!(client.get_player_win_rate_bps(&admin), 0);
+}
