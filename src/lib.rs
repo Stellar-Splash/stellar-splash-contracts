@@ -2886,6 +2886,37 @@ impl TournamentVaultContract {
         Ok(amount)
     }
 
+    /// Allows the contract admin to dynamically update the minimum allowable prize amount.
+    pub fn set_min_prize_amount(
+        env: Env,
+        admin: Address,
+        new_min_amount: i128,
+    ) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        admin.require_auth();
+        if new_min_amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MinPrizeAmount, &new_min_amount);
+
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("set_min")),
+            new_min_amount,
+        );
+
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
