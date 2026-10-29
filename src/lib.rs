@@ -2685,6 +2685,22 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Extends the persistent storage TTL for a specific participant record.
+    pub fn extend_participant_storage_ttl(
+        env: Env,
+        tournament_id: u64,
+        player: Address,
+    ) -> Result<(), Error> {
+        let part_key = DataKey::Participant(tournament_id, player);
+        if !env.storage().persistent().has(&part_key) {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .persistent()
+            .extend_ttl(&part_key, STORAGE_BUMP_THRESHOLD, STORAGE_LIFETIME_BUMP);
+        Ok(())
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
