@@ -2571,6 +2571,16 @@ impl TournamentVaultContract {
         }
     }
 
+    /// Calculates the player career win rate in basis points (10,000 bps = 100.00%).
+    pub fn get_player_win_rate_bps(env: Env, player: Address) -> u32 {
+        let stats = Self::get_player_stats(env, player);
+        if stats.tournaments_joined == 0 {
+            0
+        } else {
+            ((stats.tournaments_won as u64 * 10_000) / (stats.tournaments_joined as u64)) as u32
+        }
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
