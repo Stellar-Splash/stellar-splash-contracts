@@ -3082,6 +3082,23 @@ impl TournamentVaultContract {
         0
     }
 
+    /// Returns the final ranking position (1st, 2nd, etc.) of a player in the settlement allocations, or 0.
+    pub fn get_player_rank(env: Env, tournament_id: u64, player: Address) -> u32 {
+        let alloc_key = DataKey::SettlementAllocations(tournament_id);
+        if let Some(allocations) = env
+            .storage()
+            .persistent()
+            .get::<_, Vec<RecipientAllocation>>(&alloc_key)
+        {
+            for a in allocations.iter() {
+                if a.recipient == player {
+                    return a.rank;
+                }
+            }
+        }
+        0
+    }
+
     /// Returns the active contract/protocol version (Protocol 21).
     pub fn get_contract_version(_env: Env) -> u32 {
         21
