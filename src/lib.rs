@@ -336,6 +336,7 @@ pub struct AchievementBadge {
 #[derive(Clone)]
 enum DataKey {
     Admin,
+    AuthorizedVerifier,
     Tournament(u64),
     Participant(u64, Address),
     TournamentCount,
@@ -417,6 +418,36 @@ impl TournamentVaultContract {
     /// Retrieve the contract deployer / root administrator address.
     pub fn get_contract_deployer(env: Env) -> Result<Address, Error> {
         Self::get_admin(env)
+    }
+
+    /// Sets the designated authorized off-chain result verifier address (admin only).
+    pub fn set_authorized_verifier(
+        env: Env,
+        admin: Address,
+        verifier: Address,
+    ) -> Result<(), Error> {
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::AuthorizedVerifier, &verifier);
+        env.events().publish(
+            (symbol_short!("verifier"), symbol_short!("set")),
+            (admin, verifier),
+        );
+        Ok(())
+    }
+
+    /// Retrieves the designated authorized result verifier address, if configured.
+    pub fn get_authorized_verifier(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::AuthorizedVerifier)
     }
 
     /// Explicitly extends instance storage TTL for contract metadata and admin records.
@@ -914,6 +945,20 @@ impl TournamentVaultContract {
             return Err(Error::TournamentFull);
         }
 
+        let fee_key = DataKey::EntryFee(tournament_id);
+        if let Some(fee_config) = env
+            .storage()
+            .persistent()
+            .get::<_, EntryFeeConfig>(&fee_key)
+        {
+            if fee_config.fee_amount > 0 {
+                let paid_key = DataKey::PlayerEntryFeePaid(tournament_id, player.clone());
+                if !env.storage().persistent().has(&paid_key) {
+                    return Err(Error::Unauthorized);
+                }
+            }
+        }
+
         let part_key = DataKey::Participant(tournament_id, player.clone());
         if env.storage().persistent().has(&part_key) {
             return Err(Error::ParticipantAlreadyRegistered);
@@ -1123,11 +1168,6 @@ impl TournamentVaultContract {
             return Err(Error::InvalidTournamentState);
         }
 
-        let refund_amount = tournament.current_funded_amount;
-        if refund_amount <= 0 {
-            return Err(Error::InvalidAmount);
-        }
-
         let is_admin = match Self::get_admin(env.clone()) {
             Ok(adm) => adm == funder,
             Err(_) => false,
@@ -1137,10 +1177,26 @@ impl TournamentVaultContract {
             return Err(Error::Unauthorized);
         }
 
+        let tot_spon_key = DataKey::TotalSponsoredAmount(tournament_id);
+        let total_sponsored: i128 = env.storage().persistent().get(&tot_spon_key).unwrap_or(0);
+        let creator_refundable = tournament
+            .current_funded_amount
+            .checked_sub(total_sponsored)
+            .ok_or(Error::ArithmeticOverflow)?;
+
+        if creator_refundable <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let refund_amount = creator_refundable;
+
         let client = token::Client::new(&env, &tournament.prize_asset);
         client.transfer(&env.current_contract_address(), &funder, &refund_amount);
 
-        tournament.current_funded_amount = 0;
+        tournament.current_funded_amount = tournament
+            .current_funded_amount
+            .checked_sub(refund_amount)
+            .ok_or(Error::ArithmeticOverflow)?;
         env.storage().persistent().set(&key, &tournament);
         env.storage()
             .persistent()
@@ -1167,8 +1223,22 @@ impl TournamentVaultContract {
         verifier.require_auth();
 
         let tourn_key = DataKey::Tournament(input.tournament_id);
-        if !env.storage().persistent().has(&tourn_key) {
-            return Err(Error::TournamentNotFound);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let is_admin = match Self::get_admin(env.clone()) {
+            Ok(adm) => adm == verifier,
+            Err(_) => false,
+        };
+        let auth_verifier: Option<Address> =
+            env.storage().instance().get(&DataKey::AuthorizedVerifier);
+        if let Some(auth_v) = auth_verifier {
+            if verifier != auth_v && !is_admin && tournament.creator != verifier {
+                return Err(Error::Unauthorized);
+            }
         }
 
         let res_key = DataKey::VerifiedResult(input.tournament_id, input.match_id.clone());
@@ -1772,10 +1842,7 @@ impl TournamentVaultContract {
         }
 
         if Self::is_tournament_disputed(env.clone(), tournament_id) {
-            let admin = Self::get_admin(env.clone())?;
-            if admin != caller {
-                return Err(Error::TournamentDisputed);
-            }
+            return Err(Error::TournamentDisputed);
         }
 
         let settle_key = DataKey::Settlement(tournament_id);
@@ -2370,6 +2437,116 @@ impl TournamentVaultContract {
             .unwrap_or(false)
     }
 
+    /// Allows a registered player to reclaim their deposited entry fee if tournament is cancelled.
+    pub fn claim_entry_fee_refund(
+        env: Env,
+        player: Address,
+        tournament_id: u64,
+    ) -> Result<i128, Error> {
+        player.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        if tournament.state != TournamentState::Cancelled {
+            return Err(Error::InvalidTournamentState);
+        }
+
+        let paid_key = DataKey::PlayerEntryFeePaid(tournament_id, player.clone());
+        if !env.storage().persistent().has(&paid_key) {
+            return Err(Error::Unauthorized);
+        }
+
+        let fee_key = DataKey::EntryFee(tournament_id);
+        let fee_config = env
+            .storage()
+            .persistent()
+            .get::<_, EntryFeeConfig>(&fee_key)
+            .ok_or(Error::InvalidAmount)?;
+
+        let fee_amount = fee_config.fee_amount;
+        if fee_amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        env.storage().persistent().remove(&paid_key);
+
+        let total_fees_key = DataKey::TotalEntryFees(tournament_id);
+        let current_total: i128 = env.storage().persistent().get(&total_fees_key).unwrap_or(0);
+        let new_total = current_total.checked_sub(fee_amount).unwrap_or(0);
+        env.storage().persistent().set(&total_fees_key, &new_total);
+
+        let client = token::Client::new(&env, &fee_config.fee_asset);
+        client.transfer(&env.current_contract_address(), &player, &fee_amount);
+
+        env.events().publish(
+            (symbol_short!("fee"), symbol_short!("refund")),
+            (tournament_id, player, fee_amount),
+        );
+
+        Ok(fee_amount)
+    }
+
+    /// Sweeps accumulated entry fees into the tournament prize pool for distribution.
+    pub fn sweep_entry_fees_to_prize_pool(
+        env: Env,
+        caller: Address,
+        tournament_id: u64,
+    ) -> Result<i128, Error> {
+        caller.require_auth();
+
+        let tourn_key = DataKey::Tournament(tournament_id);
+        let mut tournament: TournamentInfo = env
+            .storage()
+            .persistent()
+            .get(&tourn_key)
+            .ok_or(Error::TournamentNotFound)?;
+
+        let is_admin = match Self::get_admin(env.clone()) {
+            Ok(adm) => adm == caller,
+            Err(_) => false,
+        };
+
+        if tournament.creator != caller && !is_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let fee_key = DataKey::EntryFee(tournament_id);
+        let fee_config = env
+            .storage()
+            .persistent()
+            .get::<_, EntryFeeConfig>(&fee_key)
+            .ok_or(Error::InvalidAmount)?;
+
+        if fee_config.fee_asset != tournament.prize_asset {
+            return Err(Error::AssetNotWhitelisted);
+        }
+
+        let total_fees_key = DataKey::TotalEntryFees(tournament_id);
+        let fee_total: i128 = env.storage().persistent().get(&total_fees_key).unwrap_or(0);
+        if fee_total <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        env.storage().persistent().set(&total_fees_key, &0i128);
+        tournament.current_funded_amount = tournament
+            .current_funded_amount
+            .checked_add(fee_total)
+            .ok_or(Error::ArithmeticOverflow)?;
+        env.storage().persistent().set(&tourn_key, &tournament);
+
+        env.events().publish(
+            (symbol_short!("fee"), symbol_short!("swept")),
+            (tournament_id, fee_total, tournament.current_funded_amount),
+        );
+
+        Ok(fee_total)
+    }
+
     /// Records an on-chain tournament victory for a player (admin only).
     pub fn increment_player_wins(env: Env, admin: Address, player: Address) -> Result<(), Error> {
         let stored_admin: Address = env
@@ -2907,7 +3084,18 @@ impl TournamentVaultContract {
 
         env.storage().persistent().set(&contrib_key, &0i128);
 
-        let token_client = token::Client::new(&env, &tournament.prize_asset);
+        let tot_spon_key = DataKey::TotalSponsoredAmount(tournament_id);
+        let prev_total_spon: i128 = env.storage().persistent().get(&tot_spon_key).unwrap_or(0);
+        let new_total_spon = prev_total_spon.checked_sub(amount).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&tot_spon_key, &new_total_spon);
+
+        let mut tourn = tournament;
+        tourn.current_funded_amount = tourn.current_funded_amount.checked_sub(amount).unwrap_or(0);
+        env.storage().persistent().set(&tourn_key, &tourn);
+
+        let token_client = token::Client::new(&env, &tourn.prize_asset);
         token_client.transfer(&env.current_contract_address(), &sponsor, &amount);
 
         env.events().publish(

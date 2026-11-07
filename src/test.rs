@@ -2291,3 +2291,108 @@ fn test_contract_upgrade_and_governance_invariants() {
     assert_eq!(client.get_proposed_admin(), None);
     assert_eq!(client.get_admin(), new_admin);
 }
+
+#[test]
+fn test_remediation_entry_fee_sponsorship_and_verifier_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(TournamentVaultContract, ());
+    let client = TournamentVaultContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let token_admin = Address::generate(&env);
+    let (token_client, token_asset) = create_token_contract(&env, &token_admin);
+
+    let creator = Address::generate(&env);
+    let funder = Address::generate(&env);
+    let sponsor = Address::generate(&env);
+    let player = Address::generate(&env);
+    let verifier = Address::generate(&env);
+    let rogue = Address::generate(&env);
+
+    let prize_amount: i128 = 20_000_000;
+    let sponsor_amount: i128 = 10_000_000;
+    let entry_fee: i128 = 5_000_000;
+
+    token_asset.mint(&funder, &prize_amount);
+    token_asset.mint(&sponsor, &sponsor_amount);
+    token_asset.mint(&player, &entry_fee);
+
+    let tournament_id: u64 = 777;
+    let config = TournamentConfig {
+        tournament_id,
+        title: String::from_str(&env, "Remediation Cup"),
+        game_id: String::from_str(&env, "splash-rush"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+
+    client.create_tournament(&creator, &config);
+    client.fund_prize_pool(&funder, &tournament_id, &prize_amount);
+    client.sponsor_tournament(&sponsor, &tournament_id, &sponsor_amount);
+
+    assert_eq!(
+        client.get_total_sponsored_amount(&tournament_id),
+        sponsor_amount
+    );
+    assert_eq!(
+        client.get_vault_balance(&tournament_id),
+        prize_amount + sponsor_amount
+    );
+
+    // Cancel tournament and test non-draining refund accounting
+    client.cancel_tournament(&creator, &tournament_id);
+
+    // Creator claims refund (only funded prize amount, leaving sponsor amount intact)
+    let refunded = client.claim_refund(&creator, &tournament_id);
+    assert_eq!(refunded, prize_amount);
+    assert_eq!(client.get_vault_balance(&tournament_id), sponsor_amount);
+
+    // Sponsor claims refund successfully
+    let spon_refunded = client.claim_sponsor_refund(&sponsor, &tournament_id);
+    assert_eq!(spon_refunded, sponsor_amount);
+    assert_eq!(client.get_vault_balance(&tournament_id), 0);
+
+    // Test Authorized Verifier Guard
+    client.set_authorized_verifier(&admin, &verifier);
+    assert_eq!(client.get_authorized_verifier(), Some(verifier.clone()));
+
+    // Tournament 778 for verifier test
+    token_asset.mint(&funder, &prize_amount);
+    let t2_id: u64 = 778;
+    let config2 = TournamentConfig {
+        tournament_id: t2_id,
+        title: String::from_str(&env, "Verifier Test"),
+        game_id: String::from_str(&env, "splash-rush"),
+        prize_asset: token_client.address.clone(),
+        target_prize_amount: prize_amount,
+        max_participants: 10,
+        start_time: 1000,
+        end_time: 2000,
+    };
+    client.create_tournament(&creator, &config2);
+    client.fund_prize_pool(&funder, &t2_id, &prize_amount);
+    client.open_tournament(&creator, &t2_id);
+
+    let input = VerifiedResultInput {
+        tournament_id: t2_id,
+        match_id: String::from_str(&env, "match-safe-1"),
+        player: player.clone(),
+        result_hash: BytesN::from_array(&env, &[1u8; 32]),
+        score: 1500,
+        verification_version: 1,
+    };
+
+    // Rogue verifier rejected
+    let rogue_res = client.try_record_verified_result(&rogue, &input);
+    assert_eq!(rogue_res, Err(Ok(Error::Unauthorized)));
+
+    // Authorized verifier accepted
+    let valid_rec = client.record_verified_result(&verifier, &input);
+    assert_eq!(valid_rec.score, 1500);
+}
