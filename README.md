@@ -7,7 +7,8 @@
 [![Soroban Protocol](https://img.shields.io/badge/Soroban%20Protocol-v21%20%7C%20v22-blueviolet.svg)](https://stellar.org)
 [![Contract Deployed](https://img.shields.io/badge/Contract-Deployed-brightgreen.svg)](https://lab.stellar.org/r/testnet/contract/CACHWJEZY6JN36VFACWRQ7FP4T5EPRRRNBVLOSFHXTJHETZY36JD7QYJ)
 [![Live Frontend](https://img.shields.io/badge/Frontend-Netlify-blue.svg)](https://stellar-splash.netlify.app)
-[![Tests Passing](https://img.shields.io/badge/Tests-9%2F9%20Passing-brightgreen.svg)](https://github.com/Stellar-Splash/stellar-splash-contracts)
+[![Tests Passing](https://img.shields.io/badge/Tests-30%2F30%20Passing-brightgreen.svg)](https://github.com/Stellar-Splash/stellar-splash-contracts)
+[![Formal Invariants](https://img.shields.io/badge/Formal%20Invariants-Verified-brightgreen.svg)](https://github.com/Stellar-Splash/stellar-splash-contracts)
 
 Soroban smart contract suite providing the non-custodial prize escrow vault, tournament lifecycle state machine, verified result attestation registry, and immutable prize agreement governance for the Stellar Splash gaming platform. Fully compliant with Soroban Protocol 21/22 and featuring built-in state TTL management, emergency circuit breakers, and cancellation refund safeguards.
 
@@ -86,6 +87,9 @@ Authorizes and dispatches escrowed tokens directly to winners based on basis poi
 - **Prize Agreement Lifecycle**: `Draft -> PendingApproval -> ReadyToLock -> Locked -> Superseded`
 - **10,000 Basis Points Invariant**: All registered prize distribution rules must sum to exactly 10,000 bps ($100.00\%$).
 - **Immutability Guarantee**: Once an agreement is marked `Locked`, its parameters cannot be modified. Modifications require superseding through version increments (e.g. `v1 -> v2`).
+- **Triple-Ledger Solvency Invariant**: Strict segregation between `PrizePoolEscrow`, `SponsorshipLedger`, and `EntryFeeLedger`. Sponsor balances and registration fees cannot cross-drain tournament prize obligations, guaranteeing total solvency.
+- **Authorized Verifier Enforcement**: Only designated verifiers (`AuthorizedVerifier`) or the contract admin can submit match attestations and finalize canonical rankings.
+- **Dispute Lock Guard**: Active disputes (`submit_dispute`) freeze settlement authorization and execution until formally resolved or dismissed by governance.
 
 ---
 
@@ -95,12 +99,17 @@ Authorizes and dispatches escrowed tokens directly to winners based on basis poi
 - `initialize(admin: Address)`: Set contract admin identity.
 - `create_tournament(creator: Address, config: TournamentConfig) -> TournamentInfo`: Register a new tournament.
 - `fund_prize_pool(funder: Address, tournament_id: u64, amount: i128) -> TournamentInfo`: Escrow prize tokens into the contract vault.
+- `fund_prize_pool_from(funder: Address, tournament_id: u64, amount: i128) -> TournamentInfo`: SEP-41 allowance-based funding.
+- `sponsor_tournament(sponsor: Address, tournament_id: u64, amount: i128)`: Contribute non-creator funds tracked in the segregated sponsor ledger.
 - `open_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Transition tournament to `Open` once funded.
-- `register_participant(player: Address, tournament_id: u64)`: Register a player within tournament capacity.
+- `register_participant(player: Address, tournament_id: u64)`: Register a player within tournament capacity, transferring registration entry fees to the segregated fee ledger.
 - `start_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Move tournament into `InProgress`.
 - `complete_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Conclude tournament gameplay.
+- `sweep_entry_fees_to_prize_pool(caller: Address, tournament_id: u64) -> i128`: Consolidate collected participant fees into the main prize vault prior to settlement.
 - `cancel_tournament(caller: Address, tournament_id: u64) -> TournamentInfo`: Cancel tournament before settlement, enabling refund claims.
 - `claim_refund(funder: Address, tournament_id: u64) -> i128`: Safely refund locked escrow prize funds back to the creator/funder.
+- `claim_sponsor_refund(funder: Address, tournament_id: u64) -> i128`: Refund designated sponsor contributions from the segregated ledger upon cancellation.
+- `claim_entry_fee_refund(player: Address, tournament_id: u64) -> i128`: Player-initiated refund of entry fees upon tournament cancellation.
 - `get_vault_balance(tournament_id: u64) -> i128`: Read locked escrow balance.
 
 ### State TTL & Circuit Breaker Governance
@@ -109,9 +118,14 @@ Authorizes and dispatches escrowed tokens directly to winners based on basis poi
 - `pause()`: Admin-only emergency circuit breaker to halt state-changing operations.
 - `unpause()`: Admin-only method to resume contract operations after maintenance.
 - `is_paused() -> bool`: Read current circuit breaker pause status.
+- `set_authorized_verifier(admin: Address, verifier: Address)`: Set trusted off-chain verifier oracle.
+- `get_authorized_verifier() -> Option<Address>`: Query current trusted verifier.
+- `submit_dispute(challenger: Address, tournament_id: u64, reason_code: u32)`: Flag match irregularities and halt payouts.
+- `resolve_dispute(admin: Address, tournament_id: u64)`: Clear dispute after administrative review.
+- `dismiss_dispute(admin: Address, tournament_id: u64)`: Dismiss illegitimate dispute claims.
 
 ### Result Verification & Standings
-- `record_verified_result(verifier: Address, input: VerifiedResultInput) -> VerifiedResultRecord`: Authoritatively commits verified match scores and SHA-256 result digests. Rejects duplicate submissions.
+- `record_verified_result(verifier: Address, input: VerifiedResultInput) -> VerifiedResultRecord`: Authoritatively commits verified match scores and SHA-256 result digests. Restricted to `AuthorizedVerifier` or admin.
 - `get_verified_result(tournament_id: u64, match_id: String) -> VerifiedResultRecord`: Query verified result record.
 - `record_ranking_hash(caller: Address, tournament_id: u64, ranking_version: u32, ranking_hash: BytesN<32>) -> RankingRecord`: Finalize canonical 32-byte ranking hash.
 - `get_ranking_record(tournament_id: u64) -> RankingRecord`: Retrieve finalized ranking commitment.
@@ -128,13 +142,13 @@ Authorizes and dispatches escrowed tokens directly to winners based on basis poi
 
 ## 🧪 Testing & Verification
 
-Run the comprehensive Rust unit tests:
+Run the comprehensive Rust unit and invariant tests:
 
 ```bash
 cargo test
 ```
 
-All 9 test suites pass with 100% coverage:
+All 30 unit, invariant, and security test suites pass with 100% coverage:
 - `test_tournament_full_lifecycle`
 - `test_verified_result_and_ranking_hash`
 - `test_prize_agreement_lifecycle_and_immutability`
@@ -144,6 +158,27 @@ All 9 test suites pass with 100% coverage:
 - `test_zero_amount_and_invalid_bounds`
 - `test_emergency_pause_circuit_breaker`
 - `test_tournament_cancel_and_refund`
+- `test_min_prize_amount_rejection`
+- `test_sep41_allowance_funding`
+- `test_premature_completion_rejection`
+- `test_contract_metadata_descriptor`
+- `test_max_string_length_rejection`
+- `test_tournament_details_treasury_and_settled_amount`
+- `test_metadata_uri_participant_bounds_and_dispute_window`
+- `test_total_volume_and_vault_balance`
+- `test_dispute_submission_and_resolution`
+- `test_upgrade_authorization`
+- `test_entry_fee_lifecycle`
+- `test_player_stats_and_active_tournaments`
+- `test_dispute_dismissal_and_contract_version`
+- `test_dispute_window_extension_and_settlement_queries`
+- `test_dispute_active_capacity_and_treasury_queries`
+- `test_batch1_queries_ttl_and_math`
+- `test_batch2_sponsorship_admin_and_payout_queries`
+- `test_batch3_badges_governance_and_lifecycle`
+- `test_formal_invariants_solvency_and_math`
+- `test_contract_upgrade_and_governance_invariants`
+- `test_remediation_entry_fee_sponsorship_and_verifier_guards`
 
 ---
 
