@@ -671,12 +671,12 @@ impl TournamentVaultContract {
 
         let mut id_list: Vec<u64> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::TournamentIdList)
             .unwrap_or(Vec::new(&env));
         id_list.push_back(config.tournament_id);
         env.storage()
-            .instance()
+            .persistent()
             .set(&DataKey::TournamentIdList, &id_list);
 
         // Emit tournament_created event
@@ -1776,6 +1776,11 @@ impl TournamentVaultContract {
             if alloc.amount <= 0 {
                 return Err(Error::InvalidAmount);
             }
+            if tournament.current_participants > 0
+                && !Self::is_participant(env.clone(), input.tournament_id, alloc.recipient.clone())
+            {
+                return Err(Error::Unauthorized);
+            }
             total_allocated = total_allocated
                 .checked_add(alloc.amount)
                 .ok_or(Error::ArithmeticOverflow)?;
@@ -1835,10 +1840,7 @@ impl TournamentVaultContract {
         }
 
         if !Self::is_dispute_window_elapsed(env.clone(), tournament_id) {
-            let admin = Self::get_admin(env.clone())?;
-            if admin != caller {
-                return Err(Error::DisputeWindowNotElapsed);
-            }
+            return Err(Error::DisputeWindowNotElapsed);
         }
 
         if Self::is_tournament_disputed(env.clone(), tournament_id) {
@@ -2609,7 +2611,7 @@ impl TournamentVaultContract {
     pub fn get_active_tournaments(env: Env) -> Vec<u64> {
         let id_list: Vec<u64> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::TournamentIdList)
             .unwrap_or(Vec::new(&env));
 
@@ -2676,7 +2678,7 @@ impl TournamentVaultContract {
     pub fn get_tournament_summaries(env: Env, offset: u32, limit: u32) -> Vec<TournamentSummary> {
         let id_list: Vec<u64> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::TournamentIdList)
             .unwrap_or(Vec::new(&env));
 
@@ -2751,7 +2753,7 @@ impl TournamentVaultContract {
     pub fn get_disputed_tournaments(env: Env) -> Vec<u64> {
         let id_list: Vec<u64> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::TournamentIdList)
             .unwrap_or(Vec::new(&env));
 
